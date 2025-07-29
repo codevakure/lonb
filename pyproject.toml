@@ -26,11 +26,8 @@ omit = [
     "tests/*",
     "venv/*",
     ".venv/*",
-    "*/migrations/*",
-    "manage.py",
-    "*/settings/*",
-    "*/venv/*",
     "*/__pycache__/*",
+    "*/migrations/*",
 ]
 
 [tool.coverage.report]
@@ -38,7 +35,6 @@ exclude_lines = [
     "pragma: no cover",
     "def __repr__",
     "if self.debug:",
-    "if settings.DEBUG",
     "raise AssertionError",
     "raise NotImplementedError",
     "if 0:",
@@ -48,8 +44,8 @@ exclude_lines = [
 ]
 
 [tool.black]
-line-length = 120
-target-version = ['py38', 'py39', 'py310', 'py311']
+line-length = 88
+target-version = ['py311']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -68,12 +64,12 @@ extend-exclude = '''
 [tool.isort]
 profile = "black"
 multi_line_output = 3
-line_length = 120
+line_length = 88
 known_first_party = ["api", "config", "services", "utils"]
-known_third_party = ["fastapi", "pydantic", "boto3", "pytest"]
+known_third_party = ["fastapi", "pydantic", "boto3", "pytest", "moto", "httpx"]
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -91,7 +87,8 @@ strict_equality = true
 module = [
     "moto.*",
     "boto3.*",
-    "botocore.*"
+    "botocore.*",
+    "aiobotocore.*"
 ]
 ignore_missing_imports = true
 

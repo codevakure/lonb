@@ -3,14 +3,21 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from dotenv import load_dotenv
 from api.routes.routes import api_router
-from config.config_kb_loan import LOG_LEVEL
+from config.config_kb_loan import LOG_LEVEL, ALLOWED_ORIGINS, ALLOWED_METHODS, ALLOWED_HEADERS, ALLOW_CREDENTIALS, ENV, DEBUG
 
-# Load environment variables
-load_dotenv()
+# Load environment variables (already loaded in config, but ensuring it's loaded early)
+load_dotenv('.env')  # Load base configuration
+load_dotenv('.env.local', override=True)  # Override with local development settings
 
 # Configure logging
 logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
 logger = logging.getLogger(__name__)
+
+# Log environment information
+logger.info(f"Starting Commercial Loan Service API in {ENV.upper()} environment")
+logger.info(f"Debug mode: {DEBUG}")
+logger.info(f"CORS Origins: {ALLOWED_ORIGINS}")
+logger.info(f"Log Level: {LOG_LEVEL}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -22,10 +29,10 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=ALLOW_CREDENTIALS,
+    allow_methods=ALLOWED_METHODS,
+    allow_headers=ALLOWED_HEADERS,
 )
 
 # Include API router
