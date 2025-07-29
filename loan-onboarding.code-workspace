@@ -1,0 +1,37 @@
+{
+    "folders": [
+        {
+            "name": "Loan Onboarding API",
+            "path": "."
+        }
+    ],
+    "settings": {
+        "python.defaultInterpreterPath": "./venv/bin/python",
+        "python.terminal.activateEnvironment": true,
+        "editor.formatOnSave": true,
+        "files.autoSave": "onFocusChange",
+        "explorer.confirmDelete": false,
+        "explorer.confirmDragAndDrop": false,
+        "workbench.editor.untitled.hint": "hidden",
+        "workbench.startupEditor": "readme",
+        "terminal.integrated.defaultProfile.windows": "PowerShell",
+        "terminal.integrated.defaultProfile.linux": "bash"
+    },
+    "extensions": {
+        "recommendations": [
+            "ms-python.python",
+            "ms-python.black-formatter",
+            "ms-python.isort",
+            "ms-python.mypy-type-checker",
+            "ms-azuretools.vscode-docker",
+            "redhat.vscode-yaml",
+            "GitHub.copilot",
+            "GitHub.copilot-chat",
+            "ryanluker.vscode-coverage-gutters"
+        ]
+    },
+    "tasks": {
+        "version": "2.0.0",
+        "tasks": []
+    }
+}

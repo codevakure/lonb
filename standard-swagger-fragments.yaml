@@ -1,0 +1,467 @@
+# OpenAPI version identifier - required for OpenAPI 3.0 domains
+openapi: 3.0.0
+
+info:
+  title: Texas Capital Common API Fragment
+  description: Texas Capital Common API Fragment types for Texas Capital REST APIs
+  version: 1.0.0
+
+components:
+
+  ####################
+  #YUPING - Defining common security schems, common error response, common succesful response, #common traits, common headers etc...
+  ####################
+
+  ####################
+  # Common HTTP Responses
+  ####################
+  responses:
+
+    ####################
+    # Common Health Check Responses
+    ####################
+    Health-Check-Response:
+      description: Health-Check Response to indicate whether API service is UP, DEGRADED or OFFLINE
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HealthCheckModel'
+            
+    ####################
+    # Common HTTP Success Responses
+    ####################
+
+    ####################
+    # Note that for 200-OK is for request is successful and the server is returning the requested resource in the response body [e.g., GET or PUT/PATCH if resource is returned in the response]. Hence it is not included due to APIs vary greatly in the type of data they return. A common 200 response structure would be too rigid to accommodate the wide range of possible response. OAS emphasizes creating meaningful and specific responses for each operation. A generic 200 response wouldn't convey much information about the actual data returned and would introduce ambiguity
+    ####################
+            
+    201-Created:
+      description: 201 Created - request has been fulfilled and a new resource has been created [e.g. POST or PUT if resource is newly created]
+      headers:
+        location:
+          description: URL of the newly created resource
+          schema:
+            type: string
+            format: uri     
+        x-tc-correlation-id:
+          description: correlaction id for trakcing purpose
+          schema:
+            type: string
+            maxLength: 100
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SuccessModel'   
+
+    204-NoContent:
+      description: 204 No Content - request is successful and there is no content to return in the response body [e.g., DELETE or PUT/PATCH if no response body is provided]
+      content: {} # Empty content signifies no response body
+
+    207-MultiStatus:
+      description: 207 Multi Status - While there might be partial failures the overall request was processed successfully. For example, single request can affect multiple resources and response body contain information about the status of each individual operation, allowing the client to understand which operations succeeded and which failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MultiStatusResponsesModel'
+            
+    ####################
+    # Common HTTP Client Side Error Responses
+    ####################
+    400-BadRequestError:
+      description: 400 Bad Request - request not understood due to invalid syntax, missing parameters, or malformed data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorModel'   
+    401-UnauthorizedError:
+      description: 401 Unauthorized - client needs to be authenticated before accessing the requested resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorModel'    
+    403-ForbiddenError:
+      description: 403 Forbidden - client is authenticated but do not have permission to access the requested resources
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorModel'   
+    404-NotFoundError:
+      description: 404 Not Found - requested resource could not be found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorModel'    
+    405-MethodNotAllowedError:
+      description: 405 Method Not Allowed - request is understood but HTTP method being used is not allowed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorModel' 
+    429-TooManyRequestsError:
+      description: 429 Too Many Requests - client has sent too many requests in a given time period, exceeding a rate limit
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorModel' 
+            
+    ####################
+    # Common HTTP Server Side Error Responses
+    ####################            
+    500-InternalServerError:
+      description: 500 Internal Server - generic server error preventing  it from fulfilling the request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorModel'
+    502-BadGatewayError:
+      description: 502 Bad Gateway - server that acting as a gateway or proxy received an invalid response from an upstream server
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorModel'
+    503-SerivceUnavailableError:
+      description: 503 Service Unavailable - server temporarily unable to handle the request due to maintenance or overload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorModel'
+    504-GatewayTimeoutError:
+      description: 504 Gateway Timeout - server acting as a gateway or proxy not receiving timely response from an upstream server
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorModel'
+            
+  ####################
+  # Common Response Models
+  ####################
+  schemas:
+  
+    ####################
+    # Common Sucess Response Models for example GET POST PATCH PUT
+    ####################
+    SuccessModel:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          description: Success code
+          type: integer
+          format: int32
+        message:
+          description: Success message
+          type: string
+        details:
+          type: object
+          description: Additional details about the success or data returned from the operation
+
+      ####################
+    # Common Multi Status Response Models paticular for APIs dealing with batch operations or partial successes/failurses
+    ####################
+    MultiStatusResponsesModel:
+      type: object
+      description: Details of each resource operation's status
+      properties:
+        status:
+          type: array
+          description: List of status details for each operation
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                description: Unique identifier for the resource
+                example: "123"
+              code:
+                description: Success code
+                type: integer
+                format: int32
+              message:
+                description: "Description of the operation's outcome"
+                type: string
+                example: "Resource udpated successfully."
+              errors:
+                type: array
+                description: "List of errors, if any, encoutered during the operation"
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      description: "Error Code for the specific issue."
+                      example: "400"
+                    details:
+                      description: Additional details about the error
+                      type: array
+                      items:
+                        properties:
+                          source:
+                            description: where the error originated
+                            type: string
+                            example: "partyId"
+                          message:
+                            description: A human readable explanantion of the error
+                            type: string
+                            example: "partyId is missing"   
+              
+          
+    ####################
+    # Common Error Response Models
+    ####################      
+    ErrorModel:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          description: HTTP Status Error code
+          type: integer
+          example: "error code"
+        serviceName: 
+          description: API Service Name
+          type: string
+          example: "tcb-common-oas-service"
+        majorVersion:
+          description: API Service Major Version
+          type: string
+          example: "v1"
+        timestamp:
+          description: The timestamp when the error occurred
+          type: string
+          format: date-time
+          example: "2024-02-02T12:00:00Z"
+        traceId:
+          description: Unique indentifier for tracing the request
+          type: string
+        message:
+          description: Human-readable error message
+          type: string
+        details:
+          description: Additional details about the error
+          type: array
+          items:
+            properties:
+              source:
+                description: where the error originated
+                type: string
+                example: "partyId"
+              message:
+                description: A human readable explanantion of the error
+                type: string
+                example: "partyId is missing"              
+
+    ####################
+    # Health-Check
+    ####################      
+    HealthCheckModel:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        status:
+          description: Overall health status of the API
+          type: string          
+          enum: ["NORMAL", "DEGRADED", "OFFLINE"]
+        serviceName:
+          description: api service name that is returning the response
+        serviceVersion:
+          description: api version that is returning the response
+          type: string
+        timestamp:
+          description: The timestamp to check API health
+          type: string
+          format: date-time
+          example: "2024-02-02T12:00:00Z"
+        message:
+          description: Human-readable message
+          type: string
+        dependencies:
+          description: Optional list of connections this API is dependent upon
+          type: array
+          items:
+            properties:
+              name: 
+                description: Logical name of the connection of the target system
+                type: string
+                example: "SFDC / NETSUITE / DATABASE"
+              status:
+                description: Status of the connection, identifying whether connectivity is UP, DOWN or failed for some other reasons (ERROR)
+                enum: ["UP", "DOWN", "ERROR"]
+
+  ####################
+  # Common parameters
+  ####################
+  parameters:
+  
+  #########################
+  # Common texas capital query parameters definition for offset based pagination
+  # To use those query parameters:
+  # paths:
+  #   /users:
+  #     get:
+  #       parameters:
+  #         - $ref: 'https://app.swaggerhub.com/domains/texas-capital/TEXAS-CAPITAL-COMMON-API-FRAGMENT/1.0.0#/components/parameters/offset'
+  #########################  
+    offset:
+      name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 0
+        example: 0
+      description: The number of items to skip before returning the results
+    limit:
+      in: query
+      name: limit
+      required: true
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 10
+        example: 10
+      description: The number of items to return
+      
+  #########################
+  # Common texas capital query parameters definition for cursor based pagination
+  # To use those query parameters:
+  # paths:
+  #   /users:
+  #     get:
+  #       parameters:
+  #         - $ref: 'https://app.swaggerhub.com/domains/texas-capital/TEXAS-CAPITAL-COMMON-API-FRAGMENT/1.0.0#/components/parameters/cursor'
+  #########################  
+    cursor:
+      name: cursor
+      in: query
+      required: true
+      schema:
+        type: string
+        example: "eyJpZCI6I"
+      description: The cursor pointing to the start of the next set of results
+
+      
+  #########################
+  # Common texas capital custom header parameters
+  # To use those headers
+  # paths:
+  #   /users:
+  #     get:
+  #       parameters:
+  #         - $ref: 'https://app.swaggerhub.com/domains/texas-capital/TEXAS-CAPITAL-COMMON-API-FRAGMENT/1.0.0#/components/parameters/request-id'
+  #########################
+    request-id:
+      in: header
+      name: x-tc-request-id
+      description: The Request ID is a unique identifier for a single request to identify and trace the specific transaction across all the services it interacts with
+      schema:
+        type: string
+      example: pid-4U7833NMPPS
+      
+    correlation-id:
+      in: header
+      name: x-tc-correlation-id
+      description: trace the flow of a request or transaction across multiple components or services to corelate related events
+      schema:
+        type: string
+      example: ord-4U7833NMPPS    
+ 
+    integration-id:
+      in: header
+      name: x-tc-integration-id
+      description: unique identifier for the integration client or external system
+      schema:
+        type: string
+      example: ord-4U7833NMPPS   
+      
+    utc-timestamp:
+      in: header
+      name: x-tc-utc-timestamp      
+      description: Accurate time during request initiation
+      schema:
+        type: string
+        format: date-time 
+        
+    access-token:
+      in: header
+      name: x-tc-access-token    
+      description: The access token is a security credential that proves the identity of the client and its authorization to access specific resource
+      schema:
+        type: string
+        
+    grant-type:
+      in: header
+      name: x-tc-grant-type      
+      description: Carries grant type for requesting an access token
+      schema:
+        type: string
+        
+    scope:
+      in: header
+      name: x-tc-scope     
+      description: Defines the specific permissions or resources an application is allowed to access
+      schema:
+        type: string 
+        
+    api-key:
+      in: header
+      name: tc-api-key      
+      description: An API key is a unique identifier used to authenticate the client accessing the API
+      schema:
+        type: string  
+        
+    client-id:
+      in: header
+      name: x-tc-client-id      
+      description: The Client ID is a public identifier for the application that is consuming the API
+      schema:
+        type: string  
+        
+    client-secret:
+      in: header
+      name: x-tc-client-secret      
+      description: The Client Secret is a confidential key used to authenticate the application (client) along with the Client ID
+      schema:
+        type: string 
+        
+    auth-code:
+      in: header
+      name: x-tc-auth-code      
+      description: The authorization code is a temporary code issued to the client after the user successfully authenticates, which the client can exchange for an access token
+      schema:
+        type: string   
+        
+    code-challenge:
+      in: header
+      name: x-tc-code-challenge      
+      description: The code challenge is part of PKCE extension
+      schema:
+        type: string 
+        
+    code-verifier:
+      in: header
+      name: x-tc-code-verifier     
+      description: The code verifier a secured random string generated in conjunction with code challenge during the PKCE flow
+      schema:
+        type: string  
+        
+    rate-limit:
+      in: header
+      name: x-tc-rate-limit      
+      description: Request limit per hour
+      schema:
+        type: integer
+      example: 100
+      
+    consumer-name:
+      in: header
+      name: x-tc-consumer-name     
+      description: Consumer service name
+      schema:
+        type: string
