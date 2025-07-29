@@ -40,6 +40,11 @@ AWS_PROFILE = os.getenv("AWS_PROFILE")
 # Logging Configuration
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
+# Server Configuration
+API_HOST = os.getenv("API_HOST", "0.0.0.0")
+API_PORT = int(os.getenv("API_PORT", "8000"))
+API_WORKERS = int(os.getenv("API_WORKERS", "1"))
+
 # Generation Model Configuration
 GENERATION_MODEL_ID = os.getenv("GENERATION_MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0")
 

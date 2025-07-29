@@ -240,3 +240,224 @@ When working with this codebase:
 7. **Error Resilient**: Include proper error handling and graceful degradation
 
 This is a **production system** handling sensitive financial documents. Code quality, security, and reliability are paramount.
+
+---
+
+## 🏛️ Texas Capital OpenAPI Standards Compliance
+
+### Standard Response Models
+All API endpoints MUST follow Texas Capital's standardized response models defined in `standard-swagger-fragments.yaml`:
+
+#### Success Responses
+- **201 Created**: Use for successful resource creation (POST, PUT when creating)
+  - Include `location` header with new resource URL
+  - Include `x-tc-correlation-id` header for tracking
+  - Response body follows `SuccessModel` schema
+
+- **204 No Content**: Use for successful operations with no response body (DELETE, PUT/PATCH without return)
+
+- **207 Multi Status**: Use for batch operations with partial success/failure
+  - Follow `MultiStatusResponsesModel` schema for detailed status per operation
+
+#### Error Responses
+Always use standardized error models from Texas Capital fragments:
+- **400 Bad Request**: Invalid syntax, missing parameters, malformed data
+- **401 Unauthorized**: Authentication required
+- **403 Forbidden**: Authenticated but insufficient permissions
+- **404 Not Found**: Resource not found
+- **405 Method Not Allowed**: HTTP method not supported
+- **429 Too Many Requests**: Rate limit exceeded
+- **500 Internal Server Error**: Generic server error
+- **502 Bad Gateway**: Upstream service error
+- **503 Service Unavailable**: Temporary unavailability
+- **504 Gateway Timeout**: Upstream timeout
+
+All error responses MUST follow the `ErrorModel` schema with:
+```json
+{
+  "code": 400,
+  "serviceName": "loan-onboarding-api",
+  "majorVersion": "v1",
+  "timestamp": "2024-02-02T12:00:00Z",
+  "traceId": "unique-trace-id",
+  "message": "Human-readable error message",
+  "details": [
+    {
+      "source": "field_name",
+      "message": "Specific validation error"
+    }
+  ]
+}
+```
+
+#### Health Check Implementation
+Implement comprehensive health checks following `HealthCheckModel`:
+```json
+{
+  "status": "NORMAL|DEGRADED|OFFLINE",
+  "serviceName": "loan-onboarding-api",
+  "serviceVersion": "v1.0.0",
+  "timestamp": "2024-02-02T12:00:00Z",
+  "message": "Service operational",
+  "dependencies": [
+    {
+      "name": "AWS S3",
+      "status": "UP|DOWN|ERROR"
+    },
+    {
+      "name": "DynamoDB",
+      "status": "UP|DOWN|ERROR"
+    }
+  ]
+}
+```
+
+### Required Headers and Parameters
+Always include Texas Capital standard headers:
+
+#### Request Headers
+- `x-tc-request-id`: Unique identifier for single request
+- `x-tc-correlation-id`: Trace flow across multiple services
+- `x-tc-integration-id`: Identify external system/client
+- `x-tc-utc-timestamp`: Request initiation timestamp
+- `tc-api-key`: API authentication key
+
+#### Pagination Standards
+Use Texas Capital pagination patterns:
+- **Offset-based**: `offset` (default: 0), `limit` (required, max: 100)
+- **Cursor-based**: `cursor` (required for continuation)
+
+### OpenAPI Documentation Requirements
+- **OpenAPI 3.0** specification compliance
+- **Rich descriptions** for all endpoints, parameters, and models
+- **Examples** for request/response bodies
+- **Security schemas** properly defined
+- **Proper tags** for endpoint organization
+- **Comprehensive error documentation** with all possible status codes
+
+### API Design Principles
+1. **Consistency**: Follow REST conventions and Texas Capital patterns
+2. **Versioning**: Use `/api/v1/` prefix consistently
+3. **Resource-oriented**: Design around business resources (loans, documents)
+4. **Stateless**: Each request contains all necessary information
+5. **Cacheable**: Include appropriate cache headers
+6. **Layered**: Support proxy/gateway architecture
+7. **Self-descriptive**: Include media types and HATEOAS where applicable
+
+### Security Standards
+- **Input Validation**: Use Pydantic models for all request validation
+- **Output Sanitization**: Ensure no sensitive data in responses
+- **Rate Limiting**: Implement per-client rate limits
+- **Authentication**: JWT tokens with proper validation
+- **Authorization**: Role-based access control
+- **Audit Logging**: Log all security-relevant events
+- **HTTPS Only**: All endpoints must use TLS
+- **CORS**: Properly configured for allowed origins
+
+### Example FastAPI Implementation
+```python
+from fastapi import FastAPI, HTTPException, Header, Query
+from pydantic import BaseModel
+from typing import Optional, List
+import uuid
+from datetime import datetime
+
+class SuccessModel(BaseModel):
+    code: int
+    message: str
+    details: Optional[dict] = None
+
+class ErrorModel(BaseModel):
+    code: int
+    serviceName: str = "loan-onboarding-api"
+    majorVersion: str = "v1"
+    timestamp: datetime
+    traceId: str
+    message: str
+    details: Optional[List[dict]] = None
+
+@app.post("/api/v1/documents", 
+          status_code=201,
+          response_model=SuccessModel,
+          responses={
+              201: {"description": "Document created successfully"},
+              400: {"model": ErrorModel, "description": "Invalid input"},
+              500: {"model": ErrorModel, "description": "Internal server error"}
+          })
+async def create_document(
+    document: DocumentCreateModel,
+    x_tc_request_id: str = Header(..., alias="x-tc-request-id"),
+    x_tc_correlation_id: str = Header(..., alias="x-tc-correlation-id"),
+    tc_api_key: str = Header(..., alias="tc-api-key")
+):
+    """
+    Create a new loan document.
+    
+    This endpoint creates a new document in the system following
+    Texas Capital standards for document management.
+    
+    Args:
+        document: Document creation data
+        x_tc_request_id: Unique request identifier
+        x_tc_correlation_id: Cross-service correlation ID
+        tc_api_key: API authentication key
+        
+    Returns:
+        SuccessModel: Creation confirmation with details
+        
+    Raises:
+        HTTPException: 400 for validation errors, 500 for server errors
+    """
+    try:
+        # Implementation logic here
+        result = await document_service.create_document(document)
+        
+        return SuccessModel(
+            code=201,
+            message="Document created successfully",
+            details={"document_id": result.id, "location": f"/api/v1/documents/{result.id}"}
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorModel(
+                code=400,
+                timestamp=datetime.utcnow(),
+                traceId=x_tc_correlation_id,
+                message="Validation failed",
+                details=[{"source": str(e.field), "message": e.message}]
+            ).dict()
+        )
+    except Exception as e:
+        logger.error(f"Document creation failed: {e}", extra={"correlation_id": x_tc_correlation_id})
+        raise HTTPException(
+            status_code=500,
+            detail=ErrorModel(
+                code=500,
+                timestamp=datetime.utcnow(),
+                traceId=x_tc_correlation_id,
+                message="Internal server error"
+            ).dict()
+        )
+```
+
+### Code Generation Requirements
+When generating API endpoints:
+1. **Always reference** `standard-swagger-fragments.yaml` for response models
+2. **Include proper OpenAPI decorators** with complete documentation
+3. **Implement all standard headers** as parameters
+4. **Use Texas Capital error patterns** consistently
+5. **Add comprehensive logging** with correlation IDs
+6. **Include input validation** with Pydantic models
+7. **Provide realistic examples** in docstrings
+8. **Consider security implications** in all implementations
+
+### Testing Requirements
+- **Test all response codes** defined in the OpenAPI spec
+- **Validate response schemas** against Texas Capital standards
+- **Test header validation** for required Texas Capital headers
+- **Mock external dependencies** properly
+- **Test error conditions** and ensure proper error model responses
+- **Verify logging** includes correlation IDs and security events
+
+Remember: Every endpoint must be **production-ready**, **secure**, and **compliant** with Texas Capital's enterprise API standards.

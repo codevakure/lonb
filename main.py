@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from dotenv import load_dotenv
 from api.routes.routes import api_router
-from config.config_kb_loan import LOG_LEVEL, ALLOWED_ORIGINS, ALLOWED_METHODS, ALLOWED_HEADERS, ALLOW_CREDENTIALS, ENV, DEBUG
+from config.config_kb_loan import LOG_LEVEL, ALLOWED_ORIGINS, ALLOWED_METHODS, ALLOWED_HEADERS, ALLOW_CREDENTIALS, ENV, DEBUG, API_HOST, API_PORT
 
 # Load environment variables (already loaded in config, but ensuring it's loaded early)
 load_dotenv('.env')  # Load base configuration
@@ -48,4 +48,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=API_HOST, port=API_PORT)
