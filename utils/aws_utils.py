@@ -54,6 +54,37 @@ def get_loan_booking_data(product_name: str, customer_name: str) -> Optional[Dic
         logger.error(f"Error retrieving loan booking data: {str(e)}")
         return None
 
+def get_all_loan_bookings() -> List[Dict[str, Any]]:
+    """
+    Retrieve all loan booking data from DynamoDB without any filters.
+    This function mimics the pattern from the reference implementation 
+    but removes the product filter to get all bookings.
+    
+    Returns:
+        List of all booking data dictionaries
+    """
+    try:
+        table = dynamodb.Table(LOAN_BOOKING_TABLE_NAME)
+        
+        # Scan all items from the table without any filter
+        # This is equivalent to the reference implementation but without FilterExpression
+        response = table.scan()
+        items = response.get('Items', [])
+        
+        # Handle pagination for large datasets
+        while 'LastEvaluatedKey' in response:
+            response = table.scan(
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            items.extend(response.get('Items', []))
+        
+        logger.info(f"Retrieved {len(items)} total loan booking records from all products")
+        return items
+        
+    except Exception as e:
+        logger.error(f"Error retrieving all loan booking data: {str(e)}")
+        return []
+
 def save_booking_db(
     product_name: str,
     data_source_location: str,
@@ -782,8 +813,8 @@ def update_booking_sheet_created_status(loan_booking_id: str, created: bool = Tr
         table = dynamodb.Table(LOAN_BOOKING_TABLE_NAME)
         
         table.update_item(
-            Key={'loan_booking_id': loan_booking_id},
-            UpdateExpression="SET booking_sheet_created = :created",
+            Key={'loanBookingId': loan_booking_id},
+            UpdateExpression="SET isSyncCompleted = :created",
             ExpressionAttributeValues={':created': created}
         )
         

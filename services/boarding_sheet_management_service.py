@@ -2,11 +2,11 @@
 Boarding Sheet Management Service
 
 Business logic service for boarding sheet management operations.
-Implements the 3 core boarding sheet operations with proper error handling and logging.
+Handles boarding sheet creation, retrieval, and updates for loan bookings.
+Uses AI extraction to generate boarding sheet data from loan documents.
 """
 
 import logging
-import uuid
 import boto3
 from typing import Dict, Any, Optional
 from datetime import datetime
@@ -14,22 +14,23 @@ from botocore.exceptions import ClientError
 
 # AWS and configuration imports
 from config.config_kb_loan import AWS_REGION, LOAN_BOOKING_TABLE_NAME, BOOKING_SHEET_TABLE_NAME
-from boto3.dynamodb.conditions import Key
 
 # Texas Capital Standards imports
 from utils.tc_standards import TCStandardHeaders, TCLogger
-from api.models.tc_standards import TCErrorDetail
 
 # Business domain imports
 from api.models.boarding_sheet_management_models import (
-    BoardingSheetData, BoardingSheetRequest, BoardingSheetUpdateRequest
+    BoardingSheetRequest, BoardingSheetUpdateRequest
 )
 
 # Import existing utilities (to reuse tested functionality)
 from utils.aws_utils import (
-    check_booking_sheet_exists, get_booking_sheet_data, save_booking_sheet_data,
-    update_booking_sheet_created_status, update_booking_sheet_data
+    get_booking_sheet_data, save_booking_sheet_data,
+    update_booking_sheet_created_status
 )
+
+# Import structured extractor service for AI data extraction
+from services.structured_extractor_service import StructuredExtractorService
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ class BoardingSheetManagementService:
             self.dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
             self.loan_booking_table = self.dynamodb.Table(LOAN_BOOKING_TABLE_NAME)
             self.boarding_sheet_table = self.dynamodb.Table(BOOKING_SHEET_TABLE_NAME)
+            logger.info("BoardingSheetManagementService initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize BoardingSheetManagementService: {e}")
             raise
@@ -58,7 +60,7 @@ class BoardingSheetManagementService:
     ) -> Dict[str, Any]:
         """
         Generate/create a boarding sheet for a loan booking ID.
-        Auto-extracts data from documents if boarding sheet doesn't exist or force_regenerate is True.
+        Auto-extracts structured data from documents using AI and saves all fields to DynamoDB.
         
         Args:
             loan_booking_id: Unique loan booking identifier
@@ -66,7 +68,7 @@ class BoardingSheetManagementService:
             headers: Texas Capital standard headers
             
         Returns:
-            Dict containing boarding sheet creation results
+            Dict containing boarding sheet creation results with all extracted fields
             
         Raises:
             Exception: If creation fails or loan booking not found
@@ -97,7 +99,7 @@ class BoardingSheetManagementService:
                     )
                     return self._format_existing_sheet_response(existing_sheet, loan_booking_id)
             
-            # Extract boarding sheet data from documents using AI
+            # Extract all structured data using AI (same pattern as /extract API)
             extracted_data = await self._extract_boarding_sheet_from_documents(
                 loan_booking_id=loan_booking_id,
                 temperature=request_data.extraction_temperature,
@@ -105,30 +107,22 @@ class BoardingSheetManagementService:
                 headers=headers
             )
             
-            # Generate version identifier
-            version = f"v{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+            # Prepare boarding sheet data for DynamoDB save
+            # Structure: loan_booking_id (pkey) + timestamp (sortkey) + all 43 extracted fields
+            current_timestamp = datetime.utcnow().isoformat() + 'Z'
             
-            # Prepare boarding sheet data
             boarding_sheet_data = {
-                "loan_booking_id": loan_booking_id,
-                "boarding_sheet_content": extracted_data,
-                "created_at": datetime.utcnow().isoformat() + 'Z',
-                "last_updated": datetime.utcnow().isoformat() + 'Z',
-                "version": version,
-                "extraction_metadata": {
-                    "extraction_source": "bedrock_claude",
-                    "temperature": request_data.extraction_temperature,
-                    "max_tokens": request_data.max_tokens,
-                    "extraction_timestamp": datetime.utcnow().isoformat() + 'Z'
-                }
+                "loan_booking_id": loan_booking_id,  # Partition key
+                "timestamp": current_timestamp,      # Sort key
+                **extracted_data                     # All 43+ extracted fields appended directly
             }
             
-            # Save to boarding sheet table
+            # Save to DynamoDB with simplified structure
             save_success = save_booking_sheet_data(loan_booking_id, boarding_sheet_data)
             if not save_success:
                 raise Exception("Failed to save boarding sheet data to database")
             
-            # Update flag in main loan booking table
+            # Update boarding sheet created flag in main loan booking table
             flag_update_success = update_booking_sheet_created_status(loan_booking_id, True)
             if not flag_update_success:
                 TCLogger.log_warning(
@@ -137,19 +131,21 @@ class BoardingSheetManagementService:
                     {"loan_booking_id": loan_booking_id}
                 )
             
+            # Return simple response with extracted data
             result = {
                 "loan_booking_id": loan_booking_id,
-                "boarding_sheet_data": boarding_sheet_data["boarding_sheet_content"],
-                "created_at": boarding_sheet_data["created_at"],
-                "version": version,
-                "is_auto_generated": True,
-                "extraction_metadata": boarding_sheet_data["extraction_metadata"]
+                "timestamp": current_timestamp,
+                "extracted_fields": extracted_data,
+                "total_fields": len(extracted_data) if isinstance(extracted_data, dict) else 0
             }
             
             TCLogger.log_success(
                 "Boarding sheet created successfully", 
                 headers, 
-                {"loan_booking_id": loan_booking_id, "version": version}
+                {
+                    "loan_booking_id": loan_booking_id, 
+                    "fields_extracted": len(extracted_data) if isinstance(extracted_data, dict) else 0
+                }
             )
             
             return result
@@ -171,7 +167,7 @@ class BoardingSheetManagementService:
             headers: Texas Capital standard headers
             
         Returns:
-            Dict containing boarding sheet data
+            Dict containing boarding sheet data with all 43 extracted fields
             
         Raises:
             Exception: If boarding sheet not found or retrieval fails
@@ -188,14 +184,10 @@ class BoardingSheetManagementService:
             if not sheet_data:
                 raise Exception(f"Boarding sheet not found for loan booking {loan_booking_id}")
             
-            # Format response data
+            # Return direct data structure (loan_booking_id + timestamp + all extracted fields)
             result = {
                 "loan_booking_id": loan_booking_id,
-                "boarding_sheet_data": sheet_data.get('bookingSheetData', {}),
-                "created_at": sheet_data.get('date'),
-                "last_updated": sheet_data.get('last_updated'),
-                "version": sheet_data.get('bookingSheetData', {}).get('version', 'v1.0'),
-                "extraction_metadata": sheet_data.get('bookingSheetData', {}).get('extraction_metadata', {})
+                "data": sheet_data  # Contains all the extracted fields directly
             }
             
             TCLogger.log_success(
@@ -244,59 +236,30 @@ class BoardingSheetManagementService:
             if not existing_sheet:
                 raise Exception(f"Boarding sheet not found for loan booking {loan_booking_id}")
             
-            # Get current version
-            current_data = existing_sheet.get('bookingSheetData', {})
-            current_version = current_data.get('version', 'v1.0')
+            # Prepare updated data with simple structure: loan_booking_id + timestamp + updated fields
+            current_timestamp = datetime.utcnow().isoformat() + 'Z'
             
-            # Generate new version
-            new_version = self._increment_version(current_version)
-            
-            # Detect changed fields
-            changed_fields = self._detect_changed_fields(
-                current_data.get('boarding_sheet_content', {}),
-                update_request.boarding_sheet_content
-            )
-            
-            # Prepare updated boarding sheet data
             updated_data = {
-                "loan_booking_id": loan_booking_id,
-                "boarding_sheet_content": update_request.boarding_sheet_content,
-                "created_at": current_data.get('created_at', datetime.utcnow().isoformat() + 'Z'),
-                "last_updated": datetime.utcnow().isoformat() + 'Z',
-                "version": new_version,
-                "extraction_metadata": current_data.get('extraction_metadata', {}),
-                "update_metadata": {
-                    "update_timestamp": datetime.utcnow().isoformat() + 'Z',
-                    "update_notes": update_request.update_notes,
-                    "changed_fields": changed_fields,
-                    "previous_version": current_version
-                }
+                "loan_booking_id": loan_booking_id,  # Partition key
+                "timestamp": current_timestamp,      # Sort key  
+                **update_request.boarding_sheet_content  # All updated fields appended directly
             }
             
-            # Update in database using the correct function signature
-            # Note: update_boarding_sheet_data expects (loan_booking_id, data_dict)
-            # But we need to save the complete updated data, so we'll use save_booking_sheet_data
+            # Save updated data to DynamoDB
             update_success = save_booking_sheet_data(loan_booking_id, updated_data)
             if not update_success:
                 raise Exception("Failed to update boarding sheet in database")
             
             result = {
                 "loan_booking_id": loan_booking_id,
-                "updated_fields": changed_fields,
-                "previous_version": current_version,
-                "new_version": new_version,
-                "last_updated": updated_data["last_updated"],
-                "update_notes": update_request.update_notes
+                "timestamp": current_timestamp,
+                "updated_data": update_request.boarding_sheet_content
             }
             
             TCLogger.log_success(
                 "Boarding sheet updated successfully", 
                 headers, 
-                {
-                    "loan_booking_id": loan_booking_id, 
-                    "version": new_version,
-                    "changed_fields": changed_fields
-                }
+                {"loan_booking_id": loan_booking_id}
             )
             
             return result
@@ -323,73 +286,101 @@ class BoardingSheetManagementService:
     async def _extract_boarding_sheet_from_documents(
         self,
         loan_booking_id: str,
-        temperature: float,
-        max_tokens: int,
-        headers: TCStandardHeaders
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        headers: TCStandardHeaders = None
     ) -> Dict[str, Any]:
-        """Extract boarding sheet data from documents using AI service"""
+        """
+        Extract all structured boarding sheet data from loan documents using AI.
+        Uses the complete LOAN_BOOKING_SHEET_SCHEMA with 35+ fields.
+        
+        Args:
+            loan_booking_id: Unique loan booking identifier
+            temperature: Temperature for AI generation (optional)
+            max_tokens: Max tokens for AI generation (optional)
+            headers: Texas Capital standard headers
+            
+        Returns:
+            Dict containing all extracted structured data (35+ fields)
+            
+        Raises:
+            Exception: If extraction fails or documents not found
+        """
         try:
-            # Import here to avoid circular imports
-            from services.structured_extractor_service import StructuredExtractorService
-            
-            extractor = StructuredExtractorService()
-            
-            # Extract boarding sheet data using loan_booking_sheet schema
-            extracted_data = extractor.extract_from_document(
-                document_identifier=loan_booking_id,
-                schema_name="loan_booking_sheet",
-                retrieval_query="loan booking sheet information",
-                temperature=temperature,
-                max_tokens=max_tokens
+            TCLogger.log_info(
+                "Starting AI extraction for boarding sheet", 
+                headers, 
+                {
+                    "loan_booking_id": loan_booking_id,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "schema": "loan_booking_sheet"
+                }
             )
             
-            if not extracted_data:
-                raise Exception("AI extraction returned no data")
+            # Get loan booking documents first
+            response = self.loan_booking_table.get_item(
+                Key={'loanBookingId': loan_booking_id}
+            )
+            
+            if 'Item' not in response:
+                raise Exception(f"Loan booking {loan_booking_id} not found")
+            
+            loan_booking_data = response['Item']
+            if 'documents' not in loan_booking_data:
+                raise Exception(f"No documents found for loan booking {loan_booking_id}")
+            
+            documents = loan_booking_data['documents']
+            if not documents:
+                raise Exception(f"Empty documents list for loan booking {loan_booking_id}")
+            
+            # Initialize AI extraction service
+            extractor = StructuredExtractorService()
+            
+            # Extract structured data using complete schema (35+ fields)
+            extracted_result = await extractor.extract_structured_data(
+                documents=documents,
+                schema_type="loan_booking_sheet",  # Maps to LOAN_BOOKING_SHEET_SCHEMA
+                temperature=temperature or 0.3,
+                max_tokens=max_tokens or 4096,
+                headers=headers
+            )
+            
+            # Validate extraction result
+            if not extracted_result or 'extracted_data' not in extracted_result:
+                raise Exception("AI extraction returned empty or invalid result")
+            
+            extracted_data = extracted_result['extracted_data']
+            
+            # Log successful extraction with field count
+            field_count = len(extracted_data) if isinstance(extracted_data, dict) else 0
+            TCLogger.log_success(
+                "AI extraction completed successfully", 
+                headers, 
+                {
+                    "loan_booking_id": loan_booking_id,
+                    "fields_extracted": field_count,
+                    "extraction_confidence": extracted_result.get('confidence', 'unknown'),
+                    "sample_fields": list(extracted_data.keys())[:5] if isinstance(extracted_data, dict) else []
+                }
+            )
             
             return extracted_data
             
         except Exception as e:
-            TCLogger.log_error("Document extraction failed", e, headers)
-            raise Exception(f"Failed to extract data from documents: {str(e)}")
+            TCLogger.log_error(
+                "AI extraction failed for boarding sheet", 
+                e, 
+                headers, 
+                {"loan_booking_id": loan_booking_id}
+            )
+            raise Exception(f"Failed to extract boarding sheet data: {str(e)}")
 
     def _format_existing_sheet_response(self, existing_sheet: Dict[str, Any], loan_booking_id: str) -> Dict[str, Any]:
-        """Format response for existing boarding sheet"""
-        sheet_data = existing_sheet.get('bookingSheetData', {})
+        """Format response for existing boarding sheet - simple structure"""
         return {
             "loan_booking_id": loan_booking_id,
-            "boarding_sheet_data": sheet_data.get('boarding_sheet_content', sheet_data),
-            "created_at": existing_sheet.get('date'),
-            "last_updated": existing_sheet.get('last_updated'),
-            "version": sheet_data.get('version', 'v1.0'),
-            "is_auto_generated": False,
-            "extraction_metadata": sheet_data.get('extraction_metadata', {})
+            "data": existing_sheet  # Direct access to all extracted fields
         }
 
-    def _increment_version(self, current_version: str) -> str:
-        """Increment version number (e.g., v1.0 -> v1.1)"""
-        try:
-            if current_version.startswith('v'):
-                version_part = current_version[1:]
-                major, minor = version_part.split('.')
-                new_minor = int(minor) + 1
-                return f"v{major}.{new_minor}"
-            else:
-                return f"v1.1"
-        except:
-            return f"v{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
 
-    def _detect_changed_fields(self, current_data: Dict[str, Any], new_data: Dict[str, Any]) -> list:
-        """Detect which fields have changed between current and new data"""
-        changed_fields = []
-        
-        # Check for modified fields
-        for key, new_value in new_data.items():
-            if key not in current_data or current_data[key] != new_value:
-                changed_fields.append(key)
-        
-        # Check for removed fields
-        for key in current_data.keys():
-            if key not in new_data:
-                changed_fields.append(f"removed_{key}")
-                
-        return changed_fields

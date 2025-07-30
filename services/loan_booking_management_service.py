@@ -49,6 +49,9 @@ class LoanBookingManagementService:
         """
         Retrieve all loan booking IDs with sync status from DynamoDB
         
+        This method retrieves ALL loan bookings regardless of product type,
+        matching the requirement to not filter by product.
+        
         Args:
             headers: Texas Capital standard headers for tracking
             offset: Number of items to skip for pagination
@@ -63,24 +66,42 @@ class LoanBookingManagementService:
         try:
             TCLogger.log_info("Retrieving all loan bookings", headers, {"offset": offset, "limit": limit})
             
+            # Scan all items from the table without any filter to get all loan bookings regardless of product
             response = self.loan_booking_table.scan()
             items = response.get('Items', [])
+            
+            # Handle pagination for large datasets by scanning with pagination if needed
+            while 'LastEvaluatedKey' in response:
+                response = self.loan_booking_table.scan(
+                    ExclusiveStartKey=response['LastEvaluatedKey']
+                )
+                items.extend(response.get('Items', []))
             
             bookings = []
             for item in items:
                 # Get document count for this loan booking
-                doc_count = len(item.get('documentIds', '').split(',')) if item.get('documentIds') else 0
+                # Handle both string (comma-separated) and list formats for documentIds
+                document_ids = item.get('documentIds', [])
+                if isinstance(document_ids, str):
+                    doc_count = len(document_ids.split(',')) if document_ids else 0
+                elif isinstance(document_ids, list):
+                    doc_count = len(document_ids)
+                else:
+                    doc_count = 0
                 
                 booking_info = LoanBookingInfo(
                     loan_booking_id=item.get('loanBookingId', ''),
-                    customer_name=item.get('customer_name', ''),
-                    product_type=item.get('product_name', ''),
+                    customer_name=item.get('customerName', ''),  # Use correct field name
+                    product_type=item.get('productName', ''),    # Use correct field name
                     created_at=item.get('created_at', ''),
-                    is_sync_completed=item.get('isSyncCompleted', False),
+                    is_sync_completed=item.get('isSyncCompleted', False),  # Use correct field name
                     sync_completed_at=item.get('syncCompletedAt'),
                     document_count=doc_count
                 )
                 bookings.append(booking_info)
+            
+            # Sort bookings by creation date (most recent first)
+            bookings.sort(key=lambda x: x.created_at or '', reverse=True)
             
             # Apply pagination
             start_index = offset
@@ -269,20 +290,25 @@ class LoanBookingManagementService:
                 raise Exception(f"Loan booking {loan_booking_id} not found")
             
             booking_item = items[0]
-            document_ids = booking_item.get('documentIds', '').split(',') if booking_item.get('documentIds') else []
+            # Handle both string (comma-separated) and list formats for documentIds
+            document_ids = booking_item.get('documentIds', [])
+            if isinstance(document_ids, str):
+                document_ids = document_ids.split(',') if document_ids else []
+            elif not isinstance(document_ids, list):
+                document_ids = []
             
             # Get document metadata from S3
             documents = []
             for doc_id in document_ids:
-                if doc_id.strip():  # Skip empty document IDs
+                if doc_id and doc_id.strip():  # Skip empty document IDs
                     doc_metadata = await self._get_document_metadata_by_id(doc_id, headers)
                     if doc_metadata:
                         documents.append(doc_metadata)
             
             result = {
                 "loan_booking_id": loan_booking_id,
-                "customer_name": booking_item.get('customer_name', ''),
-                "product_type": booking_item.get('product_name', ''),
+                "customer_name": booking_item.get('customerName', ''),    # Use correct field name
+                "product_type": booking_item.get('productName', ''),      # Use correct field name
                 "is_sync_completed": booking_item.get('isSyncCompleted', False),
                 "sync_completed_at": booking_item.get('syncCompletedAt'),
                 "documents": documents,
@@ -390,7 +416,7 @@ class LoanBookingManagementService:
         """Check if booking already exists for customer and product"""
         try:
             response = self.loan_booking_table.scan(
-                FilterExpression="customer_name = :customer_name AND product_name = :product_name",
+                FilterExpression="customerName = :customer_name AND productName = :product_name",
                 ExpressionAttributeValues={
                     ':customer_name': customer_name,
                     ':product_name': product_type
@@ -415,12 +441,12 @@ class LoanBookingManagementService:
             self.loan_booking_table.put_item(
                 Item={
                     'loanBookingId': loan_booking_id,
-                    'product_name': product_type.value,
-                    'customer_name': customer_name,
-                    'documentIds': ','.join(document_ids),
+                    'productName': product_type.value,  # Use correct field name
+                    'customerName': customer_name,      # Use correct field name
+                    'documentIds': document_ids,        # Store as list directly
                     'dataSourceLocation': data_source_location,
                     'created_at': datetime.utcnow().isoformat(),
-                    'isSyncCompleted': False,
+                    'isSyncCompleted': False,           # Use correct field name
                     'bookingSheetCreated': False
                 }
             )
