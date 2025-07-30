@@ -12,7 +12,6 @@ aiofiles
 # AWS Integration
 boto3
 botocore
-aiobotocore
 
 # Configuration and Environment
 python-dotenv
