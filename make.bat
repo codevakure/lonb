@@ -25,6 +25,9 @@ if "%1"=="" goto help
 if "%1"=="help" goto help
 if "%1"=="init" goto init
 if "%1"=="backend" goto backend
+if "%1"=="backend-dev" goto backend-dev
+if "%1"=="backend-staging" goto backend-staging
+if "%1"=="backend-prod" goto backend-prod
 if "%1"=="test" goto test
 if "%1"=="test-cov" goto test-cov
 if "%1"=="test-report" goto test-report
@@ -37,6 +40,9 @@ if "%1"=="clean-all" goto clean-all
 if "%1"=="venv" goto venv
 if "%1"=="install-dev" goto install-dev
 if "%1"=="setup-env" goto setup-env
+if "%1"=="env-validate" goto env-validate
+if "%1"=="env-template" goto env-template
+if "%1"=="env-copy" goto env-copy
 if "%1"=="docker-build" goto docker-build
 if "%1"=="docker-up" goto docker-up
 if "%1"=="docker-down" goto docker-down
@@ -57,10 +63,18 @@ echo   make.bat install-dev   Install development dependencies
 echo   make.bat setup-env     Setup environment configuration files
 echo.
 echo %GREEN%Development Commands:%RESET%
-echo   make.bat backend       Start development server with hot reload
+echo   make.bat backend       Start development server with hot reload (uses .env.local)
+echo   make.bat backend-dev   Start development server using .env.development
+echo   make.bat backend-staging Start staging server using .env.staging
+echo   make.bat backend-prod  Start production server using .env.production
 echo   make.bat test          Run unit tests with coverage report
 echo   make.bat test-cov      Run tests with detailed coverage analysis
 echo   make.bat test-report   Generate HTML coverage report
+echo.
+echo %GREEN%Environment Commands:%RESET%
+echo   make.bat env-validate  Validate current environment configuration
+echo   make.bat env-template  Show environment variable template
+echo   make.bat env-copy      Copy environment files for different environments
 echo.
 echo %GREEN%Code Quality Commands:%RESET%
 echo   make.bat lint          Run all linting and formatting checks

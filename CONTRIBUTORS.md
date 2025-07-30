@@ -33,56 +33,103 @@ Before contributing, ensure you have:
 
 - **Python 3.11+** installed
 - **Git** for version control
-- **AWS CLI** configured with appropriate credentials
+- **AWS CLI** configured with appropriate credentials (optional for development)
 - **Docker** (optional, for containerized development)
 - **VS Code** (recommended) with Python extensions
 
 ### Quick Setup
 
-1. **Fork the repository**
+1. **Fork and Clone the repository**
 ```bash
-git clone https://github.com/your-username/lonb.git
-cd lonb/api
+git clone https://github.com/your-username/loan-onboarding-api.git
+cd loan-onboarding-api
 ```
 
-2. **Create virtual environment**
+2. **Run complete development setup**
 ```bash
-python -m venv venv
+# For Unix/Linux/MacOS
+make init-dev
+
+# For Windows
+make.bat init
+```
+
+This will:
+- Create and activate virtual environment
+- Install all development dependencies
+- Set up environment configuration files
+- Create `.env.local` with safe defaults for immediate development
+
+3. **Start development server**
+```bash
+# Using Makefile (recommended)
+make backend
+
+# Or directly with uvicorn
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 ## 🏗️ Development Setup
 
 ### Environment Configuration
 
-Create a `.env` file in the project root:
+The project uses a systematic environment configuration:
 
+- **`.env.example`** - Complete template with documentation
+- **`.env.development`** - Development settings with mocking enabled
+- **`.env.staging`** - Staging environment configuration
+- **`.env.production`** - Production deployment settings
+- **`.env.local`** - Your local overrides (auto-created, git-ignored)
+
+**Quick start for immediate development:**
 ```bash
-# AWS Configuration
-AWS_REGION=us-east-1
-S3_BUCKET=your-test-bucket
-KB_ID=your-knowledge-base-id
-DATA_SOURCE_ID=your-data-source-id
-
-# DynamoDB Tables
-LOAN_BOOKING_TABLE_NAME=commercial-loan-bookings-dev
-BOOKING_SHEET_TABLE_NAME=loan-booking-sheet-dev
-
-# Application Settings
+# The setup process creates .env.local with these safe defaults:
 ENV=development
+DEBUG=true
 LOG_LEVEL=DEBUG
-DEBUG=True
+USE_MOCK_AWS=true              # No real AWS needed for development
+SKIP_AWS_VALIDATION=true
+AWS_REGION=us-east-1
+S3_BUCKET=dev-loan-documents-bucket
+KNOWLEDGE_BASE_ID=dev-knowledge-base-id
+DATA_SOURCE_ID=dev-data-source-id
+LOAN_BOOKING_TABLE_NAME=dev-loan-bookings
+BOOKING_SHEET_TABLE_NAME=dev-boarding-sheet
+
+# CORS configured for local development
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000,http://127.0.0.1:8000
+```
+
+**For AWS testing (optional):**
+If you want to test with real AWS services, update `.env.local`:
+```bash
+USE_MOCK_AWS=false
+SKIP_AWS_VALIDATION=false
+# Add your AWS credentials (uncomment):
+# AWS_ACCESS_KEY_ID=your-key
+# AWS_SECRET_ACCESS_KEY=your-secret
+# Update resource names to your actual resources:
+# S3_BUCKET=your-actual-s3-bucket
+# KNOWLEDGE_BASE_ID=your-actual-kb-id
+# etc.
 ```
 
 ### Local Development Server
 
 ```bash
 # Start development server with hot reload
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+make backend                    # Uses .env.local settings
+# OR
+make backend-dev               # Uses .env.development explicitly
 
 # Access the application
 # API: http://localhost:8000
 # Docs: http://localhost:8000/docs
 # Health: http://localhost:8000/health
+
+# Test different environments
+make backend-staging           # Uses .env.staging
+make backend-prod             # Uses .env.production (local testing)
 ```
 
 ### Development Tools
@@ -868,94 +915,370 @@ export S3_BUCKET=commercial-loan-booking
 
 #### Key Configuration Variables
 
-**Application Settings:**
+**🔧 Core Application Settings (Required)**
 ```bash
 ENV=development                    # Environment: development, staging, production
-DEBUG=True                        # Enable debug mode
-LOG_LEVEL=DEBUG                   # Logging level: DEBUG, INFO, WARNING, ERROR
-API_HOST=0.0.0.0                 # Server host
-API_PORT=8000                    # API port
+LOG_LEVEL=INFO                    # Logging level: DEBUG, INFO, WARNING, ERROR
+API_HOST=0.0.0.0                 # Server bind address (0.0.0.0 for all interfaces)
+API_PORT=8000                    # Server port 
+API_WORKERS=1                    # Number of uvicorn workers (production uses more)
 ```
 
-**AWS Configuration:**
+**☁️ AWS Configuration (Required for AWS Services)**
 ```bash
-AWS_DEFAULT_REGION=us-east-1     # AWS region
-AWS_ACCESS_KEY_ID=test           # AWS access key (test for local)
-AWS_SECRET_ACCESS_KEY=test       # AWS secret key (test for local)
-S3_BUCKET_NAME=test-bucket       # S3 bucket name
-USE_MOCK_AWS=true               # Use mocked AWS services locally
+# AWS Region (Required)
+AWS_REGION=us-east-1             # AWS region for all services
+
+# AWS Authentication (Choose ONE method):
+# Method 1: Environment variables (explicit - recommended for containers)
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+
+# Method 2: AWS Profile (recommended for local development)
+AWS_PROFILE=your-profile-name    # Uses ~/.aws/credentials and ~/.aws/config
+
+# Method 3: IAM Roles (automatic in EC2/ECS/Lambda - no env vars needed)
+# Method 4: Test credentials (for mocked services only)
+AWS_ACCESS_KEY_ID=test
+AWS_SECRET_ACCESS_KEY=test
 ```
 
-**CORS Configuration:**
+**📦 S3 Configuration (Required)**
 ```bash
-# Development/Local - Permissive (automatically set)
-ALLOWED_ORIGINS=*                           # Allows all origins for easy testing
-ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS # All methods allowed
-ALLOWED_HEADERS=*                           # All headers allowed
-ALLOW_CREDENTIALS=true                      # Credentials allowed
+S3_BUCKET=commercial-loan-booking    # S3 bucket for document storage
+S3_PREFIX=loan-documents/            # S3 key prefix for organization
+```
 
-# Staging - Moderate restrictions
-ALLOWED_ORIGINS=https://staging.yourdomain.com,https://staging-api.yourdomain.com
-ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS # Standard methods
-ALLOWED_HEADERS=Content-Type,Authorization,X-Requested-With # Specific headers
-ALLOW_CREDENTIALS=true                      # Credentials for auth
+**🗃️ DynamoDB Configuration (Required)**
+```bash
+LOAN_BOOKING_TABLE_NAME=commercial-loan-bookings    # Loan booking metadata table
+BOOKING_SHEET_TABLE_NAME=loan-booking-sheet         # Boarding sheet data table
+```
 
-# Production - Strict
+**🤖 Bedrock AI Configuration (Required for AI Features)**
+```bash
+# Knowledge Base
+KNOWLEDGE_BASE_ID=BBAPAIKMU8       # Bedrock Knowledge Base ID
+DATA_SOURCE_ID=14LDJIJGX3          # Knowledge Base data source ID
+
+# AI Models
+MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0              # Primary AI model
+GENERATION_MODEL_ID=anthropic.claude-3-5-sonnet-20240620-v1:0  # Generation model
+
+# Production-only Bedrock settings
+BEDROCK_AGENT_ROLE_ARN=arn:aws:iam::account:role/bedrock-role  # IAM role for Bedrock
+GUARDRAIL_ID=your-guardrail-id     # Bedrock guardrail configuration
+```
+
+**🔧 AI Processing Parameters (Optional - Has Defaults)**
+```bash
+MAX_TOKENS_TO_SAMPLE=4000          # Maximum tokens for AI generation
+NUMBER_OF_RETRIEVAL_RESULTS=15     # Knowledge base retrieval count
+AUTO_INGESTION_WAIT_TIME=600       # Time to wait for auto-ingestion (seconds)
+AUTO_INGESTION_CHECK_INTERVAL=30   # Check interval for ingestion status (seconds)
+```
+
+**🌐 CORS Configuration (Environment-Aware)**
+```bash
+# Development (Automatic - permissive for testing)
+ALLOWED_ORIGINS=*                  # Allows all origins
+ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS
+ALLOWED_HEADERS=*                  # All headers allowed
+ALLOW_CREDENTIALS=true
+
+# Staging/Production (Specify exact domains)
 ALLOWED_ORIGINS=https://yourdomain.com,https://api.yourdomain.com
-ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS # Standard methods only
-ALLOWED_HEADERS=Content-Type,Authorization,X-Requested-With # Required headers only
-ALLOW_CREDENTIALS=false                     # No credentials for security
+ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS
+ALLOWED_HEADERS=Content-Type,Authorization,X-Requested-With
+ALLOW_CREDENTIALS=false            # More secure for production
 ```
 
-**Security Configuration:**
+**🔒 Security Configuration (Environment-Specific)**
 ```bash
-USE_MOCK_AWS=false                          # Use real AWS services in production
-SKIP_AWS_VALIDATION=false                   # Enable AWS validation in production
+# Development/Testing
+USE_MOCK_AWS=true                  # Use mocked AWS services (moto library)
+SKIP_AWS_VALIDATION=true          # Skip AWS connectivity checks
+DEBUG=true                        # Enable debug mode
+
+# Production
+USE_MOCK_AWS=false                # Use real AWS services
+SKIP_AWS_VALIDATION=false         # Enable AWS validation
+DEBUG=false                       # Disable debug mode
 ```
 
-#### Environment-Aware Configuration
-
-The application automatically adjusts its behavior based on the `ENV` environment variable:
-
-**Environment Detection:**
+**🐳 Docker Configuration (Optional)**
 ```bash
-ENV=development  # Local development
-ENV=staging     # Staging environment  
-ENV=production  # Production environment
+NGINX_PORT=80                     # Nginx HTTP port
+NGINX_SSL_PORT=443               # Nginx HTTPS port
+VERSION=latest                   # Docker image version tag
 ```
 
-**Automatic CORS Adjustments:**
-- **Development/Local**: Permissive CORS (`ALLOWED_ORIGINS=*`) for easy frontend development
-- **Staging**: Moderate restrictions with staging domain whitelist
-- **Production**: Strict CORS with specific domain whitelist and minimal headers
+## 📋 Complete Environment Variables Reference
 
-**Other Environment-Specific Behaviors:**
-- **AWS Services**: `USE_MOCK_AWS=true` in development, real AWS in staging/production
-- **Logging**: `DEBUG` level in development, `INFO`/`ERROR` in production
-- **Security Headers**: Relaxed in development, strict in production
-- **Error Details**: Detailed in development, minimal in production
+### 🎯 Environment Configuration Files
 
-**Infrastructure-Level Features (Nginx/Docker):**
-- **Rate Limiting**: Implemented in Nginx reverse proxy (not FastAPI)
-- **File Upload Limits**: Enforced by Nginx `client_max_body_size`
-- **SSL/TLS**: Handled by Nginx with proper certificates
-- **Health Check Timeouts**: Configured in Docker/Kubernetes health probes
+The project now uses a systematic approach to environment management with dedicated files for each environment:
 
-#### Development vs Production Configuration
+- **`.env.example`** - Complete template with all variables and documentation
+- **`.env.development`** - Development-specific settings with mocking enabled
+- **`.env.staging`** - Staging environment configuration 
+- **`.env.production`** - Production deployment settings
+- **`.env.local`** - Local development overrides (git-ignored)
+- **`.env`** - Main environment file (copied from .env.example)
 
-**Development (Local):**
-- Mock AWS services via moto library
-- Debug logging enabled
-- Hot reload enabled
-- Relaxed security settings
-- Local development environment files
+### 🎯 Quick Setup by Environment
 
-**Production:**
-- Real AWS services (S3, DynamoDB, Bedrock)
-- Error-level logging
-- Multiple workers
-- Strict security settings
-- Production environment configuration
+**Development (Local Testing) - Use `.env.development`:**
+```bash
+# Required Settings
+ENV=development
+DEBUG=true
+LOG_LEVEL=DEBUG
+AWS_REGION=us-east-1
+S3_BUCKET=dev-loan-documents-bucket
+KNOWLEDGE_BASE_ID=dev-knowledge-base-id
+DATA_SOURCE_ID=dev-data-source-id
+LOAN_BOOKING_TABLE_NAME=dev-loan-bookings
+BOOKING_SHEET_TABLE_NAME=dev-boarding-sheet
+
+# Development Mocking (enabled for testing)
+USE_MOCK_AWS=true
+SKIP_AWS_VALIDATION=true
+
+# Permissive CORS for local development
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000,http://127.0.0.1:8000
+```
+
+**Staging Environment - Use `.env.staging`:**
+```bash
+# Required Settings
+ENV=staging
+DEBUG=false
+LOG_LEVEL=INFO
+AWS_REGION=us-east-1
+S3_BUCKET=staging-loan-documents-bucket
+KNOWLEDGE_BASE_ID=staging-knowledge-base-id
+DATA_SOURCE_ID=staging-data-source-id
+LOAN_BOOKING_TABLE_NAME=staging-loan-bookings
+BOOKING_SHEET_TABLE_NAME=staging-boarding-sheet
+
+# Staging Security (production-like but more permissive)
+USE_MOCK_AWS=false
+SKIP_AWS_VALIDATION=false
+ALLOWED_ORIGINS=https://staging.yourdomain.com,https://staging-api.yourdomain.com
+```
+
+**Production Environment - Use `.env.production`:**
+```bash
+# Required Settings
+ENV=production
+DEBUG=false
+LOG_LEVEL=INFO
+AWS_REGION=us-east-1
+S3_BUCKET=commercial-loan-booking
+KNOWLEDGE_BASE_ID=BBAPAIKMU8
+DATA_SOURCE_ID=14LDJIJGX3
+LOAN_BOOKING_TABLE_NAME=commercial-loan-bookings
+BOOKING_SHEET_TABLE_NAME=loan-booking-sheet
+
+# Production Security (strict)
+USE_MOCK_AWS=false
+SKIP_AWS_VALIDATION=false
+ALLOWED_ORIGINS=https://yourdomain.com,https://api.yourdomain.com
+ALLOW_CREDENTIALS=false
+
+# Optional Production Optimization
+BEDROCK_AGENT_ROLE_ARN=arn:aws:iam::account:role/bedrock-role
+GUARDRAIL_ID=your-production-guardrail-id
+API_WORKERS=4
+```
+
+### 📚 Environment Variables Detailed Reference
+
+| Variable | Required | Default | Description | Environments |
+|----------|----------|---------|-------------|--------------|
+| **🎯 Core Application (Required)** |
+| `ENV` | **YES** | `development` | Environment type (development/staging/production) | all |
+| `AWS_REGION` | **YES** | `us-east-1` | AWS region for all services | all |
+| `S3_BUCKET` | **YES** | varies by env | S3 bucket for document storage | all |
+| `KNOWLEDGE_BASE_ID` | **YES** | varies by env | Bedrock Knowledge Base ID | all |
+| `DATA_SOURCE_ID` | **YES** | varies by env | Knowledge Base data source ID | all |
+| `LOAN_BOOKING_TABLE_NAME` | **YES** | varies by env | DynamoDB table for loan bookings | all |
+| `BOOKING_SHEET_TABLE_NAME` | **YES** | varies by env | DynamoDB table for boarding sheets | all |
+| **🔐 AWS Authentication (Choose One Method)** |
+| `AWS_ACCESS_KEY_ID` | Conditional | - | AWS access key (Method 1) | staging/prod |
+| `AWS_SECRET_ACCESS_KEY` | Conditional | - | AWS secret key (Method 1) | staging/prod |
+| `AWS_PROFILE` | Conditional | - | AWS CLI profile name (Method 2) | development |
+| `AWS_IAM_ROLE` | Conditional | - | IAM role for ECS/EC2 (Method 3 - Recommended) | production |
+| `AWS_WEB_IDENTITY_TOKEN_FILE` | Conditional | - | OIDC token file (Method 4) | kubernetes |
+| **⚙️ Optional Application Settings** |
+| `DEBUG` | No | `false` | Enable debug mode and detailed logging | all |
+| `LOG_LEVEL` | No | `INFO` | Logging verbosity (DEBUG/INFO/WARNING/ERROR) | all |
+| `API_HOST` | No | `0.0.0.0` | Server bind address | all |
+| `API_PORT` | No | `8000` | Server port | all |
+| `API_WORKERS` | No | `1` | Uvicorn worker count (production: 4) | production |
+| **📁 Optional S3 Configuration** |
+| `S3_PREFIX` | No | `loan-documents/` | S3 key prefix for organization | all |
+| **🤖 Optional AI Model Configuration** |
+| `MODEL_ID` | No | `anthropic.claude-3-haiku-20240307-v1:0` | Primary AI model for processing | all |
+| `GENERATION_MODEL_ID` | No | `anthropic.claude-3-5-sonnet-20240620-v1:0` | Generation model for responses | all |
+| `MAX_TOKENS_TO_SAMPLE` | No | `4000` | Max AI generation tokens | all |
+| `NUMBER_OF_RETRIEVAL_RESULTS` | No | `15` | Knowledge base retrieval count | all |
+| `AUTO_INGESTION_WAIT_TIME` | No | `600` | Auto-ingestion timeout (seconds) | all |
+| `AUTO_INGESTION_CHECK_INTERVAL` | No | `30` | Ingestion check interval (seconds) | all |
+| **🔐 Optional Production Security** |
+| `BEDROCK_AGENT_ROLE_ARN` | No | - | Bedrock service role ARN | production |
+| `GUARDRAIL_ID` | No | - | Bedrock guardrail ID for content filtering | production |
+| **🌐 Optional CORS Configuration** |
+| `ALLOWED_ORIGINS` | No | varies by env | Allowed CORS origins (comma-separated) | all |
+| `ALLOWED_METHODS` | No | `GET,POST,PUT,DELETE,OPTIONS` | Allowed HTTP methods | all |
+| `ALLOWED_HEADERS` | No | varies by env | Allowed request headers | all |
+| `ALLOW_CREDENTIALS` | No | varies by env | Allow credentials in CORS requests | all |
+| **🧪 Optional Development & Testing** |
+| `USE_MOCK_AWS` | No | `false` | Use mocked AWS services (moto library) | development |
+| `SKIP_AWS_VALIDATION` | No | `false` | Skip AWS connectivity checks on startup | development |
+| **🐳 Optional Docker Configuration** |
+| `NGINX_PORT` | No | `80` | Nginx HTTP port | docker |
+| `NGINX_SSL_PORT` | No | `443` | Nginx HTTPS port | docker |
+| `VERSION` | No | `latest` | Docker image version tag | docker |
+
+### 🔧 Environment File Hierarchy
+
+The application loads environment variables in this priority order:
+
+1. **System Environment Variables** (Highest Priority)
+   - Set via `export VAR=value` (Unix) or `set VAR=value` (Windows)
+   - Docker container environment variables
+   - CI/CD pipeline variables
+
+2. **`.env.local`** (Local Development Overrides)
+   - Auto-generated by `make setup-env`
+   - Contains safe defaults for immediate development
+   - Git-ignored for security
+   - Perfect for developer-specific customizations
+
+3. **Environment-Specific Files**
+   - `.env.development` - Development settings with mocking
+   - `.env.staging` - Staging environment configuration
+   - `.env.production` - Production deployment settings
+
+4. **`.env`** (Base Configuration)
+   - Copied from `.env.example` during setup
+   - Contains base configuration
+   - Safe for version control
+
+5. **Hard-coded Defaults** (Lowest Priority)
+   - Defined in `config/config_kb_loan.py`
+   - Fallback values when no environment variable is set
+
+### 🛠️ AWS Authentication Methods
+
+**Method 1: Environment Variables (Recommended for Containers)**
+```bash
+export AWS_ACCESS_KEY_ID=your-access-key-id
+export AWS_SECRET_ACCESS_KEY=your-secret-access-key
+export AWS_REGION=us-east-1
+```
+
+**Method 2: AWS Profile (Recommended for Local Development)**
+```bash
+# Configure AWS CLI
+aws configure --profile your-profile
+
+# Set profile in environment
+export AWS_PROFILE=your-profile
+```
+
+**Method 3: IAM Roles (Automatic in AWS Services)**
+- EC2 instances with IAM instance profiles
+- ECS tasks with IAM task roles
+- Lambda functions with execution roles
+- No environment variables needed
+
+**Method 4: Test Credentials (Development Only)**
+```bash
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+export USE_MOCK_AWS=true
+```
+
+### 🔒 Security Best Practices
+
+**Development:**
+- Use `USE_MOCK_AWS=true` to avoid real AWS charges
+- Use test credentials: `AWS_ACCESS_KEY_ID=test`
+- Keep `.env.local` in `.gitignore`
+- Never commit real credentials
+
+**Staging/Production:**
+- Use IAM roles when possible (most secure)
+- If using access keys, rotate them regularly
+- Use AWS Secrets Manager for sensitive values
+- Enable CloudTrail for audit logging
+- Set `ALLOW_CREDENTIALS=false` for production CORS
+
+**Common Mistakes to Avoid:**
+- ❌ Committing `.env` files with real credentials
+- ❌ Using overly permissive IAM policies
+- ❌ Setting `DEBUG=true` in production
+- ❌ Using `ALLOWED_ORIGINS=*` in production
+- ❌ Forgetting to set `USE_MOCK_AWS=false` in production
+
+### 🧪 Testing Configuration
+
+**For Unit Tests:**
+```python
+# tests/conftest.py already configures these
+TEST_SETTINGS = {
+    "AWS_REGION": "us-east-1",
+    "S3_BUCKET": "test-loan-bucket", 
+    "LOAN_BOOKING_TABLE_NAME": "test-loan-bookings",
+    "BOOKING_SHEET_TABLE_NAME": "test-booking-sheets",
+    "KB_ID": "test-kb-id",
+    "DATA_SOURCE_ID": "test-data-source-id"
+}
+```
+
+**For Integration Tests:**
+```bash
+# Use mocked AWS services
+export USE_MOCK_AWS=true
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+pytest tests/ -v
+```
+
+### 🔍 Debugging Environment Issues
+
+**Check Current Configuration:**
+```python
+# Add to your Python code for debugging
+import os
+print("Current environment:")
+for key in ['ENV', 'AWS_REGION', 'S3_BUCKET', 'USE_MOCK_AWS']:
+    print(f"{key}: {os.getenv(key, 'NOT SET')}")
+```
+
+**Common Issues:**
+1. **AWS credentials not found**
+   - Check `aws configure list`
+   - Verify IAM permissions
+   - Ensure correct region
+
+2. **Import errors in development**
+   - Check virtual environment activation
+   - Verify dependencies: `pip list`
+   - Check Python path
+
+3. **Tests failing**
+   - Ensure `USE_MOCK_AWS=true` for tests
+   - Check test environment isolation
+   - Verify moto library installation
+
+4. **CORS errors in browser**
+   - Check `ALLOWED_ORIGINS` setting
+   - Verify environment-specific CORS config
+   - Test with development settings first
 
 ### � Development Standards
 

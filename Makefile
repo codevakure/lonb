@@ -67,7 +67,7 @@ define print_header
 	@echo "$(BLUE)$(BOLD)[$(1)]$(RESET)"
 endef
 
-.PHONY: help init init-dev backend test test-cov test-report lint format type-check security clean clean-cache clean-all install-dev check-python setup-env venv activate docs
+.PHONY: help init init-dev backend test test-cov test-report lint format type-check security clean clean-cache clean-all install-dev check-python setup-env venv activate docs backend-dev backend-staging backend-prod env-validate env-template env-copy docker-build docker-up docker-down docker-test
 
 # Default target
 help: ## Show this help message
@@ -82,9 +82,17 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(BOLD)Development Commands:$(RESET)"
 	@echo "  make backend       Start development server with hot reload"
+	@echo "  make backend-dev   Start development server using .env.development" 
+	@echo "  make backend-staging Start staging server using .env.staging"
+	@echo "  make backend-prod  Start production server using .env.production"
 	@echo "  make test          Run unit tests with coverage report"
 	@echo "  make test-cov      Run tests with detailed coverage analysis"
 	@echo "  make test-report   Generate HTML coverage report"
+	@echo ""
+	@echo "$(BOLD)Environment Commands:$(RESET)"
+	@echo "  make env-validate  Validate current environment configuration"
+	@echo "  make env-template  Show environment variable template"
+	@echo "  make env-copy      Copy environment files for different environments"
 	@echo ""
 	@echo "$(BOLD)Code Quality Commands:$(RESET)"
 	@echo "  make lint          Run all linting and formatting checks"
@@ -190,58 +198,102 @@ install-full: ## Install all dependencies including development tools
 
 setup-env: ## Setup environment configuration files
 	$(call print_header,ENVIRONMENT SETUP)
+	@echo "$(BLUE)Setting up environment configuration files...$(RESET)"
+	@echo ""
+	
+	# Copy main environment file from example
 	@$(PYTHON) -c "import os, shutil; shutil.copy('.env.example', '.env') if os.path.exists('.env.example') and not os.path.exists('.env') else None"
 	@if [ ! -f ".env" ]; then \
 		echo "$(YELLOW)[WARNING]$(RESET) No .env.example found. Please create .env file manually."; \
 	else \
-		echo "$(GREEN)[INFO]$(RESET) Environment file ready ✓"; \
+		echo "$(GREEN)[INFO]$(RESET) Main environment file (.env) ready ✓"; \
 	fi
+	
+	# Create/copy development environment if needed
+	@if [ ! -f ".env.development" ]; then \
+		echo "$(YELLOW)[WARNING]$(RESET) .env.development not found. Creating from template..."; \
+		$(CP) .env.example .env.development 2>$(NULL) || echo "# Development environment - copy from .env.example" > .env.development; \
+	fi
+	@echo "$(GREEN)[INFO]$(RESET) Development environment file (.env.development) ready ✓"
+	
+	# Create/copy staging environment if needed
+	@if [ ! -f ".env.staging" ]; then \
+		echo "$(YELLOW)[WARNING]$(RESET) .env.staging not found. Creating from template..."; \
+		$(CP) .env.example .env.staging 2>$(NULL) || echo "# Staging environment - copy from .env.example" > .env.staging; \
+	fi
+	@echo "$(GREEN)[INFO]$(RESET) Staging environment file (.env.staging) ready ✓"
+	
+	# Create/copy production environment if needed
+	@if [ ! -f ".env.production" ]; then \
+		echo "$(YELLOW)[WARNING]$(RESET) .env.production not found. Creating from template..."; \
+		$(CP) .env.example .env.production 2>$(NULL) || echo "# Production environment - copy from .env.example" > .env.production; \
+	fi
+	@echo "$(GREEN)[INFO]$(RESET) Production environment file (.env.production) ready ✓"
+	
+	# Create/update .env.local for immediate development
 	@if [ ! -f ".env.local" ]; then \
-		echo "# Local Development Environment" > .env.local; \
+		echo "# Local Development Environment Override" > .env.local; \
+		echo "# This file provides safe defaults for immediate development" >> .env.local; \
+		echo "" >> .env.local; \
+		echo "# Required Settings" >> .env.local; \
 		echo "ENV=development" >> .env.local; \
-		echo "DEBUG=True" >> .env.local; \
+		echo "DEBUG=true" >> .env.local; \
 		echo "LOG_LEVEL=DEBUG" >> .env.local; \
-		echo "USE_MOCK_AWS=true" >> .env.local; \
 		echo "" >> .env.local; \
-		echo "# API Configuration" >> .env.local; \
-		echo "API_PORT=8000" >> .env.local; \
-		echo "API_HOST=0.0.0.0" >> .env.local; \
-		echo "" >> .env.local; \
-		echo "# AWS Configuration (for local development)" >> .env.local; \
+		echo "# AWS Configuration (safe defaults)" >> .env.local; \
 		echo "AWS_REGION=us-east-1" >> .env.local; \
-		echo "AWS_ACCESS_KEY_ID=test" >> .env.local; \
-		echo "AWS_SECRET_ACCESS_KEY=test" >> .env.local; \
+		echo "S3_BUCKET=dev-loan-documents-bucket" >> .env.local; \
+		echo "KNOWLEDGE_BASE_ID=dev-knowledge-base-id" >> .env.local; \
+		echo "DATA_SOURCE_ID=dev-data-source-id" >> .env.local; \
+		echo "LOAN_BOOKING_TABLE_NAME=dev-loan-bookings" >> .env.local; \
+		echo "BOOKING_SHEET_TABLE_NAME=dev-boarding-sheet" >> .env.local; \
 		echo "" >> .env.local; \
-		echo "# S3 Configuration" >> .env.local; \
-		echo "S3_BUCKET=test-bucket" >> .env.local; \
-		echo "S3_PREFIX=loan-documents/" >> .env.local; \
+		echo "# Development Mocking (no real AWS needed)" >> .env.local; \
+		echo "USE_MOCK_AWS=true" >> .env.local; \
+		echo "SKIP_AWS_VALIDATION=true" >> .env.local; \
 		echo "" >> .env.local; \
-		echo "# Knowledge Base Configuration (test values)" >> .env.local; \
-		echo "KNOWLEDGE_BASE_ID=test-kb-id" >> .env.local; \
-		echo "DATA_SOURCE_ID=test-data-source-id" >> .env.local; \
-		echo "" >> .env.local; \
-		echo "# DynamoDB Tables (test values)" >> .env.local; \
-		echo "LOAN_BOOKING_TABLE_NAME=test-loan-bookings" >> .env.local; \
-		echo "BOOKING_SHEET_TABLE_NAME=test-booking-sheet" >> .env.local; \
-		echo "" >> .env.local; \
-		echo "# CORS Configuration - Development (Permissive)" >> .env.local; \
-		echo "ALLOWED_ORIGINS=*" >> .env.local; \
-		echo "ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS" >> .env.local; \
+		echo "# CORS (permissive for local development)" >> .env.local; \
+		echo "ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000,http://127.0.0.1:8000" >> .env.local; \
+		echo "ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS,PATCH" >> .env.local; \
 		echo "ALLOWED_HEADERS=*" >> .env.local; \
 		echo "ALLOW_CREDENTIALS=true" >> .env.local; \
 		echo "" >> .env.local; \
-		echo "# Security - Development" >> .env.local; \
-		echo "SKIP_AWS_VALIDATION=true" >> .env.local; \
-		echo "$(GREEN)[INFO]$(RESET) Local environment file created ✓"; \
+		echo "# Uncomment for real AWS testing:" >> .env.local; \
+		echo "# USE_MOCK_AWS=false" >> .env.local; \
+		echo "# AWS_ACCESS_KEY_ID=your-access-key" >> .env.local; \
+		echo "# AWS_SECRET_ACCESS_KEY=your-secret-key" >> .env.local; \
+		echo "$(GREEN)[INFO]$(RESET) Local development file (.env.local) created ✓"; \
 	else \
-		echo "$(GREEN)[INFO]$(RESET) Local environment file already exists ✓"; \
+		echo "$(GREEN)[INFO]$(RESET) Local development file (.env.local) already exists ✓"; \
 	fi
+	
+	@echo ""
+	@echo "$(GREEN)🎉 Environment setup completed!$(RESET)"
+	@echo ""
+	@echo "$(BOLD)Environment files created/verified:$(RESET)"
+	@echo "  📄 .env.example     - Template with all variables and documentation"
+	@echo "  📄 .env             - Main environment file (copy of .env.example)" 
+	@echo "  📄 .env.development - Development-specific settings"
+	@echo "  📄 .env.staging     - Staging-specific settings"  
+	@echo "  📄 .env.production  - Production-specific settings"
+	@echo "  📄 .env.local       - Local development overrides (git-ignored)"
+	@echo ""
+	@echo "$(BOLD)Next steps:$(RESET)"
+	@echo "1. Update the appropriate .env file for your environment"
+	@echo "2. For local development, use .env.local to override specific settings"
+	@echo "3. See CONTRIBUTORS.md for detailed environment variable documentation"
 
 # Development Commands
-backend: ## Start development server with hot reload
+backend: ## Start development server with hot reload (uses .env.local)
 	$(call print_header,STARTING DEVELOPMENT SERVER)
 	@$(PYTHON) -c "import os; exit(1) if not os.path.exists('$(VENV_DIR)') else exit(0)" || (echo "$(RED)[ERROR]$(RESET) Virtual environment not found. Run 'make init-dev' first." && exit 1)
 	@$(PYTHON) -c "import os, subprocess; env = dict(os.environ); [env.update({line.split('=')[0]: '='.join(line.split('=')[1:])}) for line in open('.env.local').read().splitlines() if line and not line.startswith('#') and '=' in line] if os.path.exists('.env.local') else None; subprocess.run([os.path.join('$(VENV_DIR)', 'Scripts', 'python'), '-m', 'uvicorn', 'main:app', '--reload', '--host', env.get('API_HOST', '0.0.0.0'), '--port', env.get('API_PORT', '8000'), '--log-level', 'debug'], env=env)"
+
+backend-dev: ## Start development server using .env.development
+	$(call print_header,STARTING DEVELOPMENT SERVER (.env.development))
+	@$(PYTHON) -c "import os; exit(1) if not os.path.exists('$(VENV_DIR)') else exit(0)" || (echo "$(RED)[ERROR]$(RESET) Virtual environment not found. Run 'make init-dev' first." && exit 1)
+	@if [ ! -f ".env.development" ]; then echo "$(RED)[ERROR]$(RESET) .env.development file not found. Run 'make setup-env' first" && exit 1; fi
+	@$(PYTHON) -c "import os, subprocess; env = dict(os.environ); [env.update({line.split('=')[0]: '='.join(line.split('=')[1:])}) for line in open('.env.development').read().splitlines() if line and not line.startswith('#') and '=' in line]; subprocess.run([os.path.join('$(VENV_DIR)', 'Scripts', 'python'), '-m', 'uvicorn', 'main:app', '--reload', '--host', env.get('API_HOST', '0.0.0.0'), '--port', env.get('API_PORT', '8000'), '--log-level', 'debug'], env=env)"
 
 backend-prod: ## Start production server (local testing)
 	$(call print_header,STARTING PRODUCTION SERVER (LOCAL))
@@ -254,6 +306,57 @@ backend-staging: ## Start staging server (local testing)
 	@$(PYTHON) -c "import os; exit(1) if not os.path.exists('$(VENV_DIR)') else exit(0)" || (echo "$(RED)[ERROR]$(RESET) Virtual environment not found. Run 'make init-dev' first." && exit 1)
 	@if [ ! -f ".env.staging" ]; then echo "$(RED)[ERROR]$(RESET) .env.staging file not found. Create one from .env.example" && exit 1; fi
 	@$(PYTHON) -c "import os, subprocess; env = dict(os.environ); [env.update({line.split('=')[0]: '='.join(line.split('=')[1:])}) for line in open('.env.staging').read().splitlines() if line and not line.startswith('#') and '=' in line]; subprocess.run([os.path.join('$(VENV_DIR)', 'Scripts', 'python'), '-m', 'uvicorn', 'main:app', '--host', env.get('API_HOST', '0.0.0.0'), '--port', env.get('API_PORT', '8000'), '--workers', env.get('API_WORKERS', '2')], env=env)"
+
+# Environment Commands
+env-validate: ## Validate current environment configuration
+	$(call print_header,VALIDATING ENVIRONMENT)
+	@echo "$(BLUE)Checking environment configuration...$(RESET)"
+	@$(PYTHON) -c "import os; \
+	required_vars = ['ENV', 'AWS_REGION', 'S3_BUCKET', 'KNOWLEDGE_BASE_ID', 'DATA_SOURCE_ID', 'LOAN_BOOKING_TABLE_NAME', 'BOOKING_SHEET_TABLE_NAME']; \
+	missing = [var for var in required_vars if not os.getenv(var)]; \
+	print('$(GREEN)[INFO]$(RESET) All required environment variables are set ✓') if not missing else print('$(RED)[ERROR]$(RESET) Missing required variables: ' + ', '.join(missing)); \
+	exit(1) if missing else exit(0)"
+	@echo "$(GREEN)[INFO]$(RESET) Environment validation completed ✓"
+
+env-template: ## Show environment variable template
+	$(call print_header,ENVIRONMENT VARIABLE TEMPLATE)
+	@echo "$(BLUE)Required Environment Variables (7 total):$(RESET)"
+	@echo "  ENV                     - Application environment (development/staging/production)"
+	@echo "  AWS_REGION              - AWS region for services"
+	@echo "  S3_BUCKET               - S3 bucket for document storage"
+	@echo "  KNOWLEDGE_BASE_ID       - Bedrock knowledge base ID"
+	@echo "  DATA_SOURCE_ID          - Bedrock data source ID"
+	@echo "  LOAN_BOOKING_TABLE_NAME - DynamoDB table for loan bookings"
+	@echo "  BOOKING_SHEET_TABLE_NAME - DynamoDB table for boarding sheets"
+	@echo ""
+	@echo "$(BLUE)Optional Environment Variables (all have defaults):$(RESET)"
+	@echo "  DEBUG                   - Enable debug mode (default: auto-set based on ENV)"
+	@echo "  LOG_LEVEL               - Logging level (default: INFO)"
+	@echo "  API_HOST                - API host (default: 0.0.0.0)"
+	@echo "  API_PORT                - API port (default: 8000)"
+	@echo "  API_WORKERS             - Number of workers (default: 1)"
+	@echo "  USE_MOCK_AWS            - Use AWS mocking (default: false)"
+	@echo "  SKIP_AWS_VALIDATION     - Skip AWS validation (default: false)"
+	@echo "  MODEL_ID                - AI model (default: claude-3-haiku)"
+	@echo "  GENERATION_MODEL_ID     - Generation model (default: claude-3-5-sonnet)"
+	@echo ""
+	@echo "$(YELLOW)See .env.example for complete template with descriptions$(RESET)"
+
+env-copy: ## Copy environment files for different environments
+	$(call print_header,COPYING ENVIRONMENT FILES)
+	@echo "$(BLUE)Available environment templates:$(RESET)"
+	@echo "  1. Development (.env.development)"
+	@echo "  2. Staging (.env.staging)"
+	@echo "  3. Production (.env.production)"
+	@echo ""
+	@echo "$(YELLOW)Copy the appropriate file to .env based on your target environment$(RESET)"
+	@echo "$(YELLOW)Example: cp .env.development .env$(RESET)"
+	@echo ""
+	@echo "$(BOLD)Environment file purposes:$(RESET)"
+	@echo "  .env.development  - Local development with mocking enabled"
+	@echo "  .env.staging      - Staging environment testing"
+	@echo "  .env.production   - Production deployment configuration"
+	@echo "  .env.local        - Local overrides (git-ignored)"
 
 # Testing Commands
 test: ## Run unit tests with coverage report

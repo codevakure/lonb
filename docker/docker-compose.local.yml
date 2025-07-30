@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Loan Onboarding API
+  # Loan Onboarding API (Local Development)
   loan-api:
     build: 
       context: ..
@@ -9,19 +9,49 @@ services:
       args:
         BUILD_DATE: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
         VCS_REF: "$(git rev-parse --short HEAD)"
-        VERSION: "${VERSION:-latest}"
-    container_name: loan-onboarding-api
+        VERSION: "${VERSION:-dev}"
+    container_name: loan-onboarding-api-local
     ports:
       - "${API_PORT:-8000}:8000"
     environment:
+      # Required Environment Variables (Local Development)
       - ENV=${ENV:-development}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - USE_MOCK_AWS=true
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      - DEBUG=${DEBUG:-true}
+      
+      # AWS S3 Configuration (Local/Mock)
+      - S3_BUCKET=${S3_BUCKET:-dev-loan-documents-bucket}
+      
+      # Knowledge Base Configuration (Local/Mock)
+      - KNOWLEDGE_BASE_ID=${KNOWLEDGE_BASE_ID:-dev-knowledge-base-id}
+      - DATA_SOURCE_ID=${DATA_SOURCE_ID:-dev-data-source-id}
+      
+      # DynamoDB Configuration (Local/Mock)
+      - LOAN_BOOKING_TABLE_NAME=${LOAN_BOOKING_TABLE_NAME:-dev-loan-bookings}
+      - BOOKING_SHEET_TABLE_NAME=${BOOKING_SHEET_TABLE_NAME:-dev-boarding-sheet}
+      
+      # Development-Specific Settings
+      - USE_MOCK_AWS=${USE_MOCK_AWS:-true}
+      - SKIP_AWS_VALIDATION=${SKIP_AWS_VALIDATION:-true}
+      
+      # Optional API Configuration (Development)
+      - API_HOST=${API_HOST:-0.0.0.0}
+      - API_WORKERS=${API_WORKERS:-1}
+      
+      # CORS Configuration (Permissive for local development)
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000,http://127.0.0.1:8000}
+      - ALLOWED_METHODS=${ALLOWED_METHODS:-GET,POST,PUT,DELETE,OPTIONS,PATCH}
+      - ALLOWED_HEADERS=${ALLOWED_HEADERS:-*}
+      - ALLOW_CREDENTIALS=${ALLOW_CREDENTIALS:-true}
+      
     env_file:
-      - .env
+      - ../.env.development
     volumes:
       - ../logs:/app/logs
+      - ../uploads:/app/uploads
+      - ../tests:/app/tests
+      - ..:/app
     networks:
       - loan-network
     restart: unless-stopped

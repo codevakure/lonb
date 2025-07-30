@@ -83,21 +83,41 @@ export AWS_REGION=us-east-1
 
 3. **Environment Configuration**
 ```bash
-# Copy environment template
-cp .env.example .env
+# Complete setup with environment files
+make init-dev        # Unix/Linux/MacOS
+# OR
+make.bat init       # Windows
 
-# Edit configuration
-S3_BUCKET=your-loan-documents-bucket
-KB_ID=your-knowledge-base-id
+# This creates all environment files including .env.local with safe defaults
+# for immediate development (no AWS credentials needed)
+```
+
+**For immediate development (no AWS setup required):**
+The setup automatically creates `.env.local` with mocking enabled - just run the server!
+
+**For AWS testing:**
+```bash
+# Edit .env.local to add your AWS credentials
+USE_MOCK_AWS=false
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+S3_BUCKET=your-test-bucket
+KNOWLEDGE_BASE_ID=your-kb-id
 DATA_SOURCE_ID=your-data-source-id
-LOAN_BOOKING_TABLE_NAME=commercial-loan-bookings
-BOOKING_SHEET_TABLE_NAME=loan-booking-sheet
 ```
 
 4. **Run the service**
 ```bash
-# Development with hot reload
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# Development with hot reload (recommended)
+make backend        # Uses .env.local with safe defaults
+
+# OR run different environments
+make backend-dev    # Uses .env.development
+make backend-staging # Uses .env.staging  
+make backend-prod   # Uses .env.production
+
+# OR directly with uvicorn
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
 
 # Production
 uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
@@ -221,16 +241,34 @@ customers = requests.get(
 ## 🔧 Configuration
 
 ### Environment Variables
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `AWS_REGION` | AWS region for services | `us-east-1` |
-| `S3_BUCKET` | S3 bucket for documents | `commercial-loan-booking` |
-| `KB_ID` | Bedrock Knowledge Base ID | Required |
-| `DATA_SOURCE_ID` | Bedrock Data Source ID | Required |
-| `LOAN_BOOKING_TABLE_NAME` | DynamoDB table for bookings | `commercial-loan-bookings` |
-| `BOOKING_SHEET_TABLE_NAME` | DynamoDB table for sheets | `loan-booking-sheet` |
-| `LOG_LEVEL` | Logging level | `INFO` |
-| `ENV` | Environment (development/production) | `development` |
+
+The application uses a systematic environment configuration with dedicated files for each environment:
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| **Core Required** |
+| `ENV` | ✅ | Environment type (development/staging/production) | `development` |
+| `AWS_REGION` | ✅ | AWS region for all services | `us-east-1` |
+| `S3_BUCKET` | ✅ | S3 bucket for document storage | varies by environment |
+| `KNOWLEDGE_BASE_ID` | ✅ | Bedrock Knowledge Base ID | varies by environment |
+| `DATA_SOURCE_ID` | ✅ | Bedrock Data Source ID | varies by environment |
+| `LOAN_BOOKING_TABLE_NAME` | ✅ | DynamoDB table for loan bookings | varies by environment |
+| `BOOKING_SHEET_TABLE_NAME` | ✅ | DynamoDB table for boarding sheets | varies by environment |
+| **Optional Configuration** |
+| `DEBUG` | ❌ | Enable debug mode | `false` |
+| `LOG_LEVEL` | ❌ | Logging verbosity | `INFO` |
+| `API_HOST` | ❌ | Server bind address | `0.0.0.0` |
+| `API_PORT` | ❌ | Server port | `8000` |
+| `USE_MOCK_AWS` | ❌ | Use mocked AWS services (development) | `false` |
+
+**Environment Files:**
+- `.env.example` - Complete template with documentation
+- `.env.development` - Development settings with mocking enabled
+- `.env.staging` - Staging environment configuration
+- `.env.production` - Production deployment settings  
+- `.env.local` - Local overrides (auto-created, git-ignored)
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md#-complete-environment-variables-reference) for the complete reference with 35+ configuration options.
 
 ### AWS Permissions
 The service requires the following IAM permissions:

@@ -14,14 +14,40 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     environment:
+      # Required Environment Variables
       - ENV=${ENV:-development}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DEBUG=${DEBUG:-false}
+      
+      # AWS S3 Configuration
+      - S3_BUCKET=${S3_BUCKET}
+      
+      # Knowledge Base Configuration  
+      - KNOWLEDGE_BASE_ID=${KNOWLEDGE_BASE_ID}
+      - DATA_SOURCE_ID=${DATA_SOURCE_ID}
+      
+      # DynamoDB Configuration
+      - LOAN_BOOKING_TABLE_NAME=${LOAN_BOOKING_TABLE_NAME}
+      - BOOKING_SHEET_TABLE_NAME=${BOOKING_SHEET_TABLE_NAME}
+      
+      # Optional AWS Authentication (if not using IAM roles)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      
+      # Optional API Configuration
+      - API_HOST=${API_HOST:-0.0.0.0}
+      - API_WORKERS=${API_WORKERS:-1}
+      
+      # Optional Development Settings
+      - USE_MOCK_AWS=${USE_MOCK_AWS:-false}
+      - SKIP_AWS_VALIDATION=${SKIP_AWS_VALIDATION:-false}
+      
     env_file:
-      - .env
-
+      - ../env
     volumes:
       - ../logs:/app/logs
+      - ../uploads:/app/uploads
     networks:
       - loan-network
     restart: unless-stopped
