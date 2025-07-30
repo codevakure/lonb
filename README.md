@@ -431,17 +431,6 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTORS.
 - 🧪 **Testing Guide**: [Testing Guidelines](.github/instructions/testing.instructions.md)
 - 🔧 **Development Guide**: [API Development](.github/instructions/api-development.instructions.md)
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-- 📧 **Issues**: [GitHub Issues](https://github.com/codevakure/lonb/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/codevakure/lonb/discussions)
-- 📖 **Documentation**: [API Docs](http://localhost:8000/docs)
-
----
 
 <div align="center">
 

@@ -128,8 +128,10 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# VS Code
-.vscode/
+# VS Code (allow team settings, ignore user-specific)
+.vscode/settings.json.user
+.vscode/launch.json.user
+.vscode/*.code-snippets.user
 
 # AWS
 .aws/
