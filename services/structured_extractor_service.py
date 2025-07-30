@@ -224,12 +224,13 @@ class StructuredExtractorService:
 
         logger.info(f"Successfully extracted and saved structured data for document identifier: '{document_identifier}'")
         
-        # Return in the format expected by the API
+        # Return in the format expected by the API with citations included
         return {
             "document_identifier": document_identifier,
             "schema_used": schema_name,
             "extracted_data": structured_data,
-            "extraction_status": "success"
+            "extraction_status": "success",
+            "citations": context_chunks  # Include the source chunks as citations
         }
 
     def save_json_to_dynamodb(self, table_name: str, loan_booking_id: str, extracted_data: dict, timestamp: Optional[int] = None):

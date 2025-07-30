@@ -6,7 +6,7 @@ Following TC Standards Architecture Guidelines - Business Domain Layer.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 from api.models.tc_standards import TCSuccessModel
 
@@ -48,6 +48,8 @@ class BoardingSheetData(BaseModel):
     last_updated: str = Field(..., description="Last update timestamp")
     version: str = Field(..., description="Version identifier")
     extraction_metadata: Optional[Dict[str, Any]] = Field(None, description="AI extraction metadata")
+    citations: Optional[List[Dict[str, Any]]] = Field(None, description="Source document chunks used for extraction")
+    field_citations: Optional[Dict[str, List[Dict[str, Any]]]] = Field(None, description="Field-level citations mapping each field to its source chunks")
 
     class Config:
         schema_extra = {
@@ -66,6 +68,39 @@ class BoardingSheetData(BaseModel):
                 "extraction_metadata": {
                     "extraction_source": "bedrock_claude",
                     "confidence_score": 0.95
+                },
+                "citations": [
+                    {
+                        "text": "Texas Manufacturing Corp is requesting a loan...",
+                        "metadata": {
+                            "sourceURI": "s3://bucket/document.pdf",
+                            "page": 1
+                        },
+                        "score": 0.95
+                    }
+                ],
+                "field_citations": {
+                    "borrower_name": [
+                        {
+                            "text": "Texas Manufacturing Corp, a Delaware corporation...",
+                            "metadata": {"sourceURI": "s3://bucket/application.pdf", "page": 1},
+                            "score": 0.98
+                        }
+                    ],
+                    "loan_amount": [
+                        {
+                            "text": "The requested loan amount is $1,000,000...",
+                            "metadata": {"sourceURI": "s3://bucket/application.pdf", "page": 2},
+                            "score": 0.95
+                        }
+                    ],
+                    "interest_rate": [
+                        {
+                            "text": "Interest rate of 5.25% per annum...",
+                            "metadata": {"sourceURI": "s3://bucket/term_sheet.pdf", "page": 1},
+                            "score": 0.92
+                        }
+                    ]
                 }
             }
         }
@@ -113,7 +148,30 @@ class BoardingSheetCreateResponse(TCSuccessModel):
                     },
                     "created_at": "2024-07-29T10:30:00Z",
                     "version": "v1.0",
-                    "is_auto_generated": True
+                    "is_auto_generated": True,
+                    "citations": [
+                        {
+                            "content": {"text": "Texas Manufacturing Corp loan application details..."},
+                            "metadata": {"source": "s3://bucket/application.pdf", "page": 1},
+                            "score": 0.95
+                        }
+                    ],
+                    "field_citations": {
+                        "borrower_name": [
+                            {
+                                "content": {"text": "Texas Manufacturing Corp, established in 1995..."},
+                                "metadata": {"source": "s3://bucket/application.pdf", "page": 1},
+                                "score": 0.98
+                            }
+                        ],
+                        "loan_amount": [
+                            {
+                                "content": {"text": "Requested loan amount: $1,000,000 for equipment purchase..."},
+                                "metadata": {"source": "s3://bucket/application.pdf", "page": 2},
+                                "score": 0.95
+                            }
+                        ]
+                    }
                 }
             }
         }
@@ -144,6 +202,29 @@ class BoardingSheetGetResponse(TCSuccessModel):
                     "extraction_metadata": {
                         "extraction_source": "bedrock_claude",
                         "confidence_score": 0.95
+                    },
+                    "citations": [
+                        {
+                            "content": {"text": "Manufacturing equipment valued at $1,200,000 will serve as collateral..."},
+                            "metadata": {"source": "s3://bucket/collateral_assessment.pdf", "page": 3},
+                            "score": 0.92
+                        }
+                    ],
+                    "field_citations": {
+                        "collateral_description": [
+                            {
+                                "content": {"text": "Manufacturing equipment including CNC machines, lathes..."},
+                                "metadata": {"source": "s3://bucket/collateral_assessment.pdf", "page": 3},
+                                "score": 0.94
+                            }
+                        ],
+                        "interest_rate": [
+                            {
+                                "content": {"text": "Prime rate plus 2.25%, current rate 5.25% per annum..."},
+                                "metadata": {"source": "s3://bucket/term_sheet.pdf", "page": 1},
+                                "score": 0.91
+                            }
+                        ]
                     }
                 }
             }

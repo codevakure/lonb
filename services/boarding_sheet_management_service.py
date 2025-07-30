@@ -98,12 +98,16 @@ class BoardingSheetManagementService:
                     return self._format_existing_sheet_response(existing_sheet, loan_booking_id)
             
             # Extract boarding sheet data from documents using AI
-            extracted_data = await self._extract_boarding_sheet_from_documents(
+            extracted_response = await self._extract_boarding_sheet_from_documents(
                 loan_booking_id=loan_booking_id,
                 temperature=request_data.extraction_temperature,
                 max_tokens=request_data.max_tokens,
                 headers=headers
             )
+            
+            # Extract the actual data and citations from the response
+            extracted_data = extracted_response.get("extracted_data", {})
+            citations = extracted_response.get("citations", [])
             
             # Generate version identifier
             version = f"v{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
@@ -120,7 +124,9 @@ class BoardingSheetManagementService:
                     "temperature": request_data.extraction_temperature,
                     "max_tokens": request_data.max_tokens,
                     "extraction_timestamp": datetime.utcnow().isoformat() + 'Z'
-                }
+                },
+                "citations": citations,  # Include citations in the saved data
+                "field_citations": extracted_response.get("field_citations", {})  # Add field-level citations
             }
             
             # Save to boarding sheet table
@@ -143,7 +149,9 @@ class BoardingSheetManagementService:
                 "created_at": boarding_sheet_data["created_at"],
                 "version": version,
                 "is_auto_generated": True,
-                "extraction_metadata": boarding_sheet_data["extraction_metadata"]
+                "extraction_metadata": boarding_sheet_data["extraction_metadata"],
+                "citations": citations,  # Include citations in the response
+                "field_citations": extracted_response.get("field_citations", {})  # Add field-level citations
             }
             
             TCLogger.log_success(
@@ -195,7 +203,9 @@ class BoardingSheetManagementService:
                 "created_at": sheet_data.get('date'),
                 "last_updated": sheet_data.get('last_updated'),
                 "version": sheet_data.get('bookingSheetData', {}).get('version', 'v1.0'),
-                "extraction_metadata": sheet_data.get('bookingSheetData', {}).get('extraction_metadata', {})
+                "extraction_metadata": sheet_data.get('bookingSheetData', {}).get('extraction_metadata', {}),
+                "citations": sheet_data.get('bookingSheetData', {}).get('citations', []),  # Include citations
+                "field_citations": sheet_data.get('bookingSheetData', {}).get('field_citations', {})  # Include field-level citations
             }
             
             TCLogger.log_success(
@@ -330,12 +340,12 @@ class BoardingSheetManagementService:
         """Extract boarding sheet data from documents using AI service"""
         try:
             # Import here to avoid circular imports
-            from services.structured_extractor_service import StructuredExtractorService
+            from services.field_level_extractor_complete import FieldLevelExtractorService
             
-            extractor = StructuredExtractorService()
+            extractor = FieldLevelExtractorService()
             
-            # Extract boarding sheet data using loan_booking_sheet schema
-            extracted_data = extractor.extract_from_document(
+            # Extract boarding sheet data using loan_booking_sheet schema with field citations
+            extraction_result = extractor.extract_with_field_citations(
                 document_identifier=loan_booking_id,
                 schema_name="loan_booking_sheet",
                 retrieval_query="loan booking sheet information",
@@ -343,10 +353,10 @@ class BoardingSheetManagementService:
                 max_tokens=max_tokens
             )
             
-            if not extracted_data:
+            if not extraction_result:
                 raise Exception("AI extraction returned no data")
             
-            return extracted_data
+            return extraction_result
             
         except Exception as e:
             TCLogger.log_error("Document extraction failed", e, headers)
@@ -362,7 +372,9 @@ class BoardingSheetManagementService:
             "last_updated": existing_sheet.get('last_updated'),
             "version": sheet_data.get('version', 'v1.0'),
             "is_auto_generated": False,
-            "extraction_metadata": sheet_data.get('extraction_metadata', {})
+            "extraction_metadata": sheet_data.get('extraction_metadata', {}),
+            "citations": sheet_data.get('citations', []),  # Include citations for existing sheets too
+            "field_citations": sheet_data.get('field_citations', {})  # Include field-level citations
         }
 
     def _increment_version(self, current_version: str) -> str:
