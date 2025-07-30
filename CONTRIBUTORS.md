@@ -48,56 +48,754 @@ cd lonb/api
 2. **Create virtual environment**
 ```bash
 python -m venv venv
-# Windows
-venv\Scripts\activate
-# macOS/Linux
-source venv/bin/activate
 ```
 
-3. **Install dependencies**
-```bash
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-```
+## 🏗️ Development Setup
 
-4. **Run tests**
-```bash
-pytest tests/ -v --cov=.
-make.bat backend
-```
+### Environment Configuration
 
-#### Docker-based Development
+Create a `.env` file in the project root:
 
 ```bash
-# Start all services (builds automatically)
-make docker-up
+# AWS Configuration
+AWS_REGION=us-east-1
+S3_BUCKET=your-test-bucket
+KB_ID=your-knowledge-base-id
+DATA_SOURCE_ID=your-data-source-id
 
-# View API documentation
-# http://localhost:8000/docs
+# DynamoDB Tables
+LOAN_BOOKING_TABLE_NAME=commercial-loan-bookings-dev
+BOOKING_SHEET_TABLE_NAME=loan-booking-sheet-dev
 
-# Stop services
-make docker-down
+# Application Settings
+ENV=development
+LOG_LEVEL=DEBUG
+DEBUG=True
 ```
 
-### 🔧 Development Commands Reference
+### Local Development Server
 
-We provide a comprehensive Makefile and equivalent batch script for all development tasks:
+```bash
+# Start development server with hot reload
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-| Task | Makefile | Windows Batch | Description |
-|------|----------|---------------|-------------|
-| **Setup** | `make init` | `make.bat init` | Production setup: venv + production dependencies |
-| **Dev Setup** | `make init-dev` | `make.bat init-dev` | Development setup: venv + all dependencies |
-| **Run Server** | `make backend` | `make.bat backend` | Start development server with hot reload |
-| **Run Tests** | `make test` | `make.bat test` | Run unit tests with coverage |
-| **Detailed Tests** | `make test-cov` | `make.bat test-cov` | Run tests with HTML coverage report |
-| **Code Quality** | `make lint` | `make.bat lint` | Run all linting and formatting |
-| **Format Code** | `make format` | `make.bat format` | Auto-format code (black, isort) |
-| **Type Check** | `make type-check` | `make.bat type-check` | Run mypy type checking |
-| **Security Scan** | `make security` | `make.bat security` | Run bandit security analysis |
-| **Clean Cache** | `make clean` | `make.bat clean` | Clean temporary files |
-| **Deep Clean** | `make clean-all` | `make.bat clean-all` | Clean everything including venv |
-| **Docker Build** | `make docker-up` | `make.bat docker-up` | Start Docker services |
-| **API Docs** | `make docs` | `make.bat docs` | Serve API documentation |
+# Access the application
+# API: http://localhost:8000
+# Docs: http://localhost:8000/docs
+# Health: http://localhost:8000/health
+```
+
+### Development Tools
+
+```bash
+# Format code
+black .
+
+# Sort imports
+isort .
+
+# Type checking
+mypy . --ignore-missing-imports
+
+# Security scan
+bandit -r . -x tests/
+
+# Run all quality checks
+make lint  # if using Makefile
+```
+
+## 🏛️ Architecture Guidelines
+
+### Texas Capital Standards Compliance
+
+**CRITICAL**: This project follows Texas Capital Banking architecture standards. All contributions MUST follow the 3-layer architecture pattern:
+
+#### Layer 1: Texas Capital Standards
+```python
+# api/models/tc_standards.py
+from api.models.tc_standards import TCSuccessModel, TCErrorModel, TCErrorDetail
+
+# utils/tc_standards.py  
+from utils.tc_standards import TCStandardHeaders, TCLogger, TCResponse
+```
+
+#### Layer 2: Business Domain Models
+```python
+# api/models/loan_booking_management_models.py
+from api.models.tc_standards import TCSuccessModel
+from pydantic import BaseModel
+
+class LoanBookingResponse(TCSuccessModel):
+    # Business-specific model extending TC standards
+```
+
+#### Layer 3: Utilities
+```python
+# utils/aws_utils.py, utils/bedrock_kb_retriever.py
+# Reusable utility functions
+```
+
+### Required Patterns
+
+#### 1. Endpoint Structure
+```python
+@router.post("/api/endpoint", response_model=TCSuccessModel)
+async def endpoint_name(
+    # ALL TC headers are optional
+    x_tc_request_id: Optional[str] = Header(None, alias="x-tc-request-id"),
+    x_tc_correlation_id: Optional[str] = Header(None, alias="x-tc-correlation-id"),
+    tc_api_key: Optional[str] = Header(None, alias="tc-api-key"),
+    # Your business parameters
+    request_data: YourModel
+) -> TCSuccessModel:
+    # Create headers object
+    headers = TCStandardHeaders.from_fastapi_headers(
+        x_tc_request_id=x_tc_request_id,
+        x_tc_correlation_id=x_tc_correlation_id,
+        tc_api_key=tc_api_key
+    )
+    
+    # Log request
+    TCLogger.log_request("/api/endpoint", headers)
+    
+    try:
+        # Business logic
+        result = await service.operation(request_data)
+        
+        # Log success
+        TCLogger.log_success("Operation name", headers)
+        
+        # Return standardized response
+        return TCResponse.success(
+            code=200,
+            message="Operation successful",
+            data={"result": result},
+            headers=headers
+        )
+        
+    except Exception as e:
+        # Log error
+        TCLogger.log_error("Operation name", e, headers)
+        
+        # Return standardized error
+        error_response = TCResponse.error(
+            code=500,
+            message="Operation failed",
+            headers=headers,
+            error_details=[
+                TCErrorDetail(source="service", message="Specific error")
+            ]
+        )
+        
+        raise HTTPException(status_code=500, detail=error_response.dict())
+```
+
+#### 2. Service Layer Pattern
+```python
+# services/your_service.py
+import structlog
+from typing import Dict, Any
+
+logger = structlog.get_logger(__name__)
+
+class YourService:
+    def __init__(self):
+        # Initialize service dependencies
+        pass
+    
+    async def business_operation(self, data: YourModel) -> Dict[str, Any]:
+        """
+        Business logic implementation.
+        
+        Args:
+            data: Validated input data
+            
+        Returns:
+            Dict with operation results
+            
+        Raises:
+            ValueError: For business logic errors
+            RuntimeError: For service errors
+        """
+        try:
+            # Implement business logic
+            result = await self._process_data(data)
+            logger.info("Operation completed", result_id=result["id"])
+            return result
+            
+        except Exception as e:
+            logger.error("Operation failed", error=str(e))
+            raise
+```
+
+#### 3. Model Structure
+```python
+# api/models/your_models.py
+from api.models.tc_standards import TCSuccessModel
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+
+class YourBusinessModel(BaseModel):
+    """Business domain model with validation."""
+    
+    field_name: str = Field(..., description="Required field description")
+    optional_field: Optional[int] = Field(None, description="Optional field")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "field_name": "example_value",
+                "optional_field": 123
+            }
+        }
+
+class YourResponseModel(TCSuccessModel):
+    """Response model extending TC standards."""
+    pass
+```
+
+## 🔄 Contributing Workflow
+
+### 1. Issue-First Development
+
+Before starting work:
+
+1. **Check existing issues** for similar work
+2. **Create or assign yourself** to an issue
+3. **Discuss the approach** with maintainers if it's a significant change
+4. **Reference the issue** in your branch name and commits
+
+### 2. Branch Strategy
+
+```bash
+# Create feature branch from main
+git checkout -b feature/issue-123-add-new-endpoint
+
+# Create bugfix branch
+git checkout -b bugfix/issue-456-fix-validation-error
+
+# Create hotfix branch for urgent fixes
+git checkout -b hotfix/issue-789-security-patch
+```
+
+### 3. Commit Message Format
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```bash
+# Format: type(scope): description
+git commit -m "feat(loan-booking): add document upload validation"
+git commit -m "fix(boarding-sheet): resolve AI extraction timeout"
+git commit -m "docs(readme): update API endpoint examples"
+git commit -m "test(routes): add integration tests for product APIs"
+
+# Types: feat, fix, docs, style, refactor, test, chore
+# Scope: loan-booking, boarding-sheet, product, tc-standards, etc.
+```
+
+### 4. Development Checklist
+
+Before submitting a PR:
+
+- [ ] **Architecture compliance** - Follows TC standards 3-layer pattern
+- [ ] **Code quality** - Passes black, isort, mypy, bandit
+- [ ] **Tests** - 85%+ coverage, unit and integration tests
+- [ ] **Documentation** - Updated docstrings and README if needed
+- [ ] **API docs** - OpenAPI specs updated for new endpoints
+- [ ] **Error handling** - Comprehensive exception handling
+- [ ] **Logging** - Structured logging with correlation IDs
+- [ ] **Configuration** - Environment variables for settings
+- [ ] **Security** - Input validation and sanitization
+
+## ✅ Code Standards
+
+### Python Style Guide
+
+We follow **PEP 8** with these specific requirements:
+
+#### Formatting
+```python
+# Line length: 88 characters (Black default)
+# Use double quotes for strings
+message = "This is the preferred string format"
+
+# Type hints are required
+def process_document(file_path: str, options: Dict[str, Any]) -> DocumentResult:
+    """Process a document with given options."""
+    pass
+
+# Use f-strings for formatting
+logger.info(f"Processing document {document_id} for user {user_id}")
+```
+
+#### Imports
+```python
+# Standard library imports first
+import os
+import sys
+from datetime import datetime
+from typing import Dict, List, Optional, Any
+
+# Third-party imports second
+import structlog
+from fastapi import FastAPI, HTTPException, Header
+from pydantic import BaseModel, Field
+
+# Local imports last
+from api.models.tc_standards import TCSuccessModel
+from services.loan_booking_management_service import LoanBookingService
+from utils.tc_standards import TCStandardHeaders, TCLogger
+```
+
+#### Error Handling
+```python
+# Use specific exception types
+try:
+    result = await aws_operation()
+except ClientError as e:
+    error_code = e.response['Error']['Code']
+    if error_code == 'NoSuchBucket':
+        raise ValueError(f"S3 bucket not found: {bucket_name}")
+    else:
+        raise RuntimeError(f"AWS operation failed: {error_code}")
+except ValidationError as e:
+    raise HTTPException(status_code=422, detail=str(e))
+```
+
+#### Documentation
+```python
+def complex_business_function(
+    data: ComplexModel, 
+    options: ProcessingOptions
+) -> ProcessingResult:
+    """
+    Perform complex business operation with detailed validation.
+    
+    This function handles the core business logic for processing
+    loan documents and extracting structured data.
+    
+    Args:
+        data: Validated input data containing document information
+        options: Processing configuration including AI model settings
+        
+    Returns:
+        ProcessingResult: Contains extracted data and metadata
+        
+    Raises:
+        ValidationError: When input data fails business rules
+        ProcessingError: When AI extraction fails
+        AWSServiceError: When AWS services are unavailable
+        
+    Example:
+        >>> data = ComplexModel(document_id="doc_123")
+        >>> options = ProcessingOptions(temperature=0.1)
+        >>> result = await complex_business_function(data, options)
+        >>> print(result.extracted_data)
+    """
+```
+
+### Architecture Patterns
+
+#### Dependency Injection
+```python
+# services/base_service.py
+from abc import ABC, abstractmethod
+
+class BaseService(ABC):
+    def __init__(self, s3_client, dynamodb_client):
+        self.s3_client = s3_client
+        self.dynamodb_client = dynamodb_client
+
+# Inject dependencies in route handlers
+@router.post("/api/endpoint")
+async def endpoint(
+    service: LoanBookingService = Depends(get_loan_booking_service)
+):
+    return await service.process_request()
+```
+
+#### Configuration Management
+```python
+# config/settings.py
+from pydantic import BaseSettings
+
+class Settings(BaseSettings):
+    aws_region: str = "us-east-1"
+    s3_bucket: str
+    kb_id: str
+    
+    class Config:
+        env_file = ".env"
+
+# Use environment-specific settings
+settings = Settings()
+```
+
+## 🧪 Testing Guidelines
+
+### Test Structure
+
+```
+tests/
+├── conftest.py                 # Shared fixtures
+├── unit/                       # Unit tests
+│   ├── test_services/
+│   ├── test_models/
+│   └── test_utils/
+├── integration/                # Integration tests
+│   ├── test_routes/
+│   └── test_aws_integration/
+└── e2e/                       # End-to-end tests
+```
+
+### Test Requirements
+
+1. **Minimum 85% code coverage**
+2. **Unit tests** for all business logic
+3. **Integration tests** for API endpoints
+4. **Mock AWS services** using moto library
+5. **Test error conditions** not just happy paths
+
+### Writing Tests
+
+#### Unit Test Example
+```python
+# tests/unit/test_services/test_loan_booking_service.py
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+from services.loan_booking_management_service import LoanBookingService
+
+@pytest.fixture
+def mock_s3_client():
+    return AsyncMock()
+
+@pytest.fixture
+def mock_dynamodb_client():
+    return AsyncMock()
+
+@pytest.fixture
+def loan_service(mock_s3_client, mock_dynamodb_client):
+    return LoanBookingService(mock_s3_client, mock_dynamodb_client)
+
+@pytest.mark.asyncio
+async def test_upload_document_success(loan_service, mock_s3_client):
+    # Arrange
+    mock_s3_client.put_object.return_value = {"ETag": "test-etag"}
+    
+    # Act
+    result = await loan_service.upload_document("test.pdf", b"content")
+    
+    # Assert
+    assert result["status"] == "success"
+    mock_s3_client.put_object.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_upload_document_failure(loan_service, mock_s3_client):
+    # Arrange
+    mock_s3_client.put_object.side_effect = ClientError(
+        error_response={'Error': {'Code': 'NoSuchBucket'}},
+        operation_name='PutObject'
+    )
+    
+    # Act & Assert
+    with pytest.raises(ValueError, match="S3 bucket not found"):
+        await loan_service.upload_document("test.pdf", b"content")
+```
+
+#### Integration Test Example
+```python
+# tests/integration/test_routes/test_loan_booking_routes.py
+import pytest
+from fastapi.testclient import TestClient
+from moto import mock_s3, mock_dynamodb
+
+@mock_s3
+@mock_dynamodb
+@pytest.mark.asyncio
+async def test_upload_documents_endpoint(client: TestClient):
+    # Setup mocked AWS resources
+    create_mock_s3_bucket()
+    create_mock_dynamodb_table()
+    
+    # Prepare test data
+    files = [
+        ("files", ("test1.pdf", b"content1", "application/pdf")),
+        ("files", ("test2.pdf", b"content2", "application/pdf"))
+    ]
+    
+    # Make request
+    response = client.post(
+        "/api/loan_booking_id/documents",
+        files=files,
+        data={"product_type": "equipment-financing"},
+        headers={"x-tc-correlation-id": "test-123"}
+    )
+    
+    # Verify response
+    assert response.status_code == 201
+    data = response.json()
+    assert data["code"] == 201
+    assert "loan_booking_id" in data["details"]
+```
+
+### Mocking Guidelines
+
+```python
+# Use moto for AWS services
+@mock_s3
+@mock_dynamodb
+def test_aws_integration():
+    # Test with mocked AWS services
+    pass
+
+# Use AsyncMock for async functions
+@pytest.fixture
+def mock_bedrock_service():
+    with patch('services.bedrock_llm_generator.BedrockLLMGenerator') as mock:
+        mock.return_value.extract_data.return_value = {"extracted": "data"}
+        yield mock
+
+# Use MagicMock for synchronous code
+@pytest.fixture
+def mock_file_system():
+    with patch('builtins.open', MagicMock()) as mock:
+        yield mock
+```
+
+## 📝 Pull Request Process
+
+### 1. Pre-PR Checklist
+
+Before creating a pull request:
+
+- [ ] **Branch is up to date** with main
+- [ ] **All tests pass** locally
+- [ ] **Code coverage** meets 85% threshold
+- [ ] **Code quality checks** pass (black, isort, mypy, bandit)
+- [ ] **Documentation updated** if needed
+- [ ] **Breaking changes documented** in PR description
+
+### 2. PR Title and Description
+
+#### Title Format
+```
+type(scope): brief description
+
+Examples:
+feat(loan-booking): add document validation endpoint
+fix(boarding-sheet): resolve AI extraction timeout issue
+docs(readme): update API usage examples
+```
+
+#### Description Template
+```markdown
+## 📝 Description
+Brief description of changes and why they were made.
+
+## 🔗 Related Issues
+Closes #123
+Related to #456
+
+## 🧪 Testing
+- [ ] Unit tests added/updated
+- [ ] Integration tests added/updated  
+- [ ] Manual testing performed
+- [ ] Documentation updated
+
+## 📋 Changes
+- Added new endpoint for document validation
+- Updated error handling in service layer
+- Added comprehensive test coverage
+
+## 🚀 Deployment Notes
+Any special deployment considerations or environment variables needed.
+
+## 📸 Screenshots (if applicable)
+Include screenshots of UI changes or API documentation updates.
+```
+
+### 3. Review Process
+
+1. **Automated checks** must pass (CI/CD pipeline)
+2. **Code review** by at least one maintainer
+3. **Architecture review** for significant changes
+4. **Security review** for security-related changes
+5. **Documentation review** for API changes
+
+### 4. Merge Requirements
+
+- ✅ All CI/CD checks pass
+- ✅ Code review approval from maintainer
+- ✅ No merge conflicts with main branch
+- ✅ Branch protection rules satisfied
+- ✅ Texas Capital architecture compliance verified
+
+## 🐛 Issue Reporting
+
+### Bug Reports
+
+Use the bug report template:
+
+```markdown
+## 🐛 Bug Description
+Clear description of the bug and expected behavior.
+
+## 🔄 Steps to Reproduce
+1. Step one
+2. Step two
+3. Step three
+
+## 💻 Environment
+- OS: [e.g., Windows 10, macOS 12, Ubuntu 20.04]
+- Python version: [e.g., 3.11.2]
+- API version: [e.g., v1.0.0]
+- AWS region: [e.g., us-east-1]
+
+## 📋 Expected Behavior
+What should happen?
+
+## 📸 Actual Behavior
+What actually happens? Include error messages.
+
+## 🔍 Additional Context
+Logs, screenshots, or other helpful information.
+```
+
+### Feature Requests
+
+```markdown
+## 🚀 Feature Request
+Brief description of the feature.
+
+## 💡 Problem/Use Case
+What problem does this solve? Who would use this?
+
+## 📋 Proposed Solution
+Detailed description of the proposed implementation.
+
+## 🔄 Alternatives Considered
+Other solutions you've considered.
+
+## 📝 Additional Context
+Mockups, examples, or related issues.
+```
+
+## 📚 Documentation
+
+### API Documentation
+
+- **OpenAPI specs** are auto-generated from FastAPI
+- **Endpoint documentation** must include examples
+- **Model schemas** must have descriptions
+- **Error responses** must be documented
+
+#### Example
+```python
+@router.post(
+    "/api/loan_booking_id/documents",
+    response_model=TCSuccessModel,
+    status_code=201,
+    summary="Upload loan documents",
+    description="Upload multiple documents for loan booking processing",
+    responses={
+        201: {
+            "description": "Documents uploaded successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "code": 201,
+                        "message": "Documents uploaded successfully",
+                        "details": {
+                            "loan_booking_id": "lb_123456789abc",
+                            "uploaded_files": ["doc1.pdf", "doc2.pdf"]
+                        }
+                    }
+                }
+            }
+        },
+        400: {"model": TCErrorModel, "description": "Invalid input"},
+        500: {"model": TCErrorModel, "description": "Server error"}
+    }
+)
+```
+
+### Code Documentation
+
+- **Docstrings** for all public functions and classes
+- **Type hints** for all parameters and returns
+- **Examples** in docstrings for complex functions
+- **Architecture decisions** documented in ADRs
+
+### README Updates
+
+When making changes that affect usage:
+
+1. **Update examples** to reflect new functionality
+2. **Add new configuration** options
+3. **Update deployment** instructions if needed
+4. **Keep version compatibility** information current
+
+## 🏆 Recognition
+
+### Contributors
+
+We recognize contributors in multiple ways:
+
+- **GitHub contributors** page
+- **Release notes** acknowledgments  
+- **Project documentation** credits
+- **Annual contributor** awards
+
+### Contribution Types
+
+We value all types of contributions:
+
+- 💻 **Code contributions** (features, fixes, improvements)
+- 📖 **Documentation** (guides, examples, API docs)
+- 🐛 **Bug reports** (detailed issue reports)
+- 💡 **Feature requests** (enhancement suggestions)
+- 🧪 **Testing** (test improvements, manual testing)
+- 🎨 **Design** (UI/UX improvements, diagrams)
+- 🌐 **Translation** (documentation translation)
+- 💬 **Community** (helping others, discussions)
+
+## 📞 Getting Help
+
+### Communication Channels
+
+- 💬 **GitHub Discussions**: For general questions and discussions
+- 🐛 **GitHub Issues**: For bug reports and feature requests
+- 📧 **Email**: For security concerns (security@texascapital.com)
+- 📖 **Documentation**: Start with the README and API docs
+
+### Development Support
+
+- 🔧 **Setup issues**: Create a setup issue with your environment details
+- 📚 **Architecture questions**: Reference the architecture guidelines
+- 🧪 **Testing help**: Review existing tests for patterns
+- 📝 **Documentation**: Check the docs folder for templates
+
+---
+
+## 🙏 Thank You
+
+Thank you for contributing to the Commercial Loan Onboarding API! Your contributions help build better tools for the commercial lending industry and advance the state of financial technology.
+
+Together, we're building **enterprise-grade software** that follows **Texas Capital Banking standards** and serves **real business needs**.
+
+---
+
+<div align="center">
+
+**Happy Contributing! 🚀**
+
+[![GitHub](https://img.shields.io/badge/GitHub-Commercial%20Loan%20API-blue.svg)](https://github.com/codevakure/lonb)
+[![Contributors](https://img.shields.io/github/contributors/codevakure/lonb.svg)](https://github.com/codevakure/lonb/graphs/contributors)
+[![Issues](https://img.shields.io/github/issues/codevakure/lonb.svg)](https://github.com/codevakure/lonb/issues)
+
+</div>
 | **Status Check** | `make status` | `make.bat status` | Check development environment |
 
 ### 📚 Development Workflow Examples
