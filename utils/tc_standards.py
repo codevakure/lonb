@@ -28,6 +28,7 @@ from datetime import datetime
 import uuid
 import logging
 from dataclasses import dataclass
+from fastapi import Header
 from api.models.tc_standards import TCSuccessModel, TCErrorModel, TCErrorDetail
 
 logger = logging.getLogger(__name__)
@@ -59,7 +60,15 @@ class TCStandardHeaders:
         x_tc_client_id: Optional[str] = None,
         x_tc_consumer_name: Optional[str] = None
     ) -> 'TCStandardHeaders':
-        """Create TCStandardHeaders from FastAPI header parameters"""
+        """
+        Create TCStandardHeaders from FastAPI header parameters
+        
+        Note: x_tc_utc_timestamp will be auto-generated if not provided
+        """
+        # Auto-generate UTC timestamp if not provided
+        if not x_tc_utc_timestamp:
+            x_tc_utc_timestamp = datetime.utcnow().isoformat() + "Z"
+            
         return cls(
             request_id=x_tc_request_id,
             correlation_id=x_tc_correlation_id,
@@ -304,14 +313,22 @@ def tc_standard_headers_dependency():
             # Use headers object
     """
     def dependency(
-        x_tc_request_id: Optional[str] = None,
-        x_tc_correlation_id: Optional[str] = None,
-        x_tc_integration_id: Optional[str] = None,
-        x_tc_utc_timestamp: Optional[str] = None,
-        tc_api_key: Optional[str] = None,
-        x_tc_client_id: Optional[str] = None,
-        x_tc_consumer_name: Optional[str] = None
+        x_tc_request_id: Optional[str] = Header(None, description="Texas Capital Request ID"),
+        x_tc_correlation_id: Optional[str] = Header(None, description="Texas Capital Correlation ID"),
+        x_tc_integration_id: Optional[str] = Header(None, description="Texas Capital Integration ID"),
+        x_tc_utc_timestamp: Optional[str] = Header(None, description="Texas Capital UTC Timestamp (auto-generated if not provided)"),
+        tc_api_key: Optional[str] = Header(None, description="Texas Capital API Key"),
+        x_tc_client_id: Optional[str] = Header(None, description="Texas Capital Client ID"),
+        x_tc_consumer_name: Optional[str] = Header(None, description="Texas Capital Consumer Name")
     ) -> TCStandardHeaders:
+        """
+        FastAPI dependency for Texas Capital standard headers
+        
+        All parameters are properly defined as HTTP headers according to
+        standard-swagger-fragments.yaml specification.
+        
+        Note: x_tc_utc_timestamp is auto-generated on the server side if not provided
+        """
         return TCStandardHeaders.from_fastapi_headers(
             x_tc_request_id=x_tc_request_id,
             x_tc_correlation_id=x_tc_correlation_id,

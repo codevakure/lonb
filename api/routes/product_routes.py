@@ -29,23 +29,46 @@ def get_product_service() -> ProductService:
     summary="Get all loan products",
     description="Retrieve all available loan products following Texas Capital standards",
     responses={
-        200: {"description": "Products retrieved successfully", "model": TCSuccessModel},
-        500: {"description": "Internal server error", "model": TCErrorModel}
+        200: {
+            "description": "Products retrieved successfully", 
+            "model": TCSuccessModel,
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/SuccessModel"}
+                }
+            }
+        },
+        500: {
+            "description": "500 Internal Server - generic server error preventing it from fulfilling the request",
+            "model": TCErrorModel,
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/ErrorModel"}
+                }
+            }
+        }
     }
 )
 async def get_products(
+    offset: int = Query(0, description="The number of items to skip before returning the results", ge=0),
+    limit: int = Query(10, description="The number of items to return", ge=1, le=100),
     headers: TCStandardHeaders = Depends(tc_standard_headers_dependency()),
     service: ProductService = Depends(get_product_service)
 ) -> TCSuccessModel:
     """
-    Get all available loan products
+    Get all available loan products with Texas Capital standard pagination
     
     Returns a Texas Capital standard response with all loan products.
     Accepts standard Texas Capital headers for request tracking.
+    Supports offset-based pagination as defined in standard-swagger-fragments.yaml.
     """
     try:
-        TCLogger.log_request("GET /products", headers)
-        result = await service.get_all_products(headers)
+        # Validate pagination using TC standards
+        from utils.tc_standards import TCPagination
+        pagination = TCPagination.validate_offset_pagination(offset, limit)
+        
+        TCLogger.log_request("GET /products", headers, {"pagination": pagination})
+        result = await service.get_all_products(headers, **pagination)
         return result
         
     except HTTPException:
@@ -73,24 +96,58 @@ async def get_products(
     summary="Get customers by product",
     description="Retrieve customers filtered by product name following Texas Capital standards",
     responses={
-        200: {"description": "Customers retrieved successfully", "model": TCSuccessModel},
-        400: {"description": "Bad request - invalid product name", "model": TCErrorModel},
-        500: {"description": "Internal server error", "model": TCErrorModel}
+        200: {
+            "description": "Products retrieved successfully", 
+            "model": TCSuccessModel,
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/SuccessModel"}
+                }
+            }
+        },
+        400: {
+            "description": "400 Bad Request - request not understood due to invalid syntax, missing parameters, or malformed data",
+            "model": TCErrorModel,
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/ErrorModel"}
+                }
+            }
+        },
+        500: {
+            "description": "500 Internal Server - generic server error preventing it from fulfilling the request",
+            "model": TCErrorModel,
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/ErrorModel"}
+                }
+            }
+        }
     }
 )
 async def get_customers_by_product(
     product_name: str = Query(..., description="Product name to filter customers by", example="Equipment Financing"),
+    offset: int = Query(0, description="The number of items to skip before returning the results", ge=0),
+    limit: int = Query(10, description="The number of items to return", ge=1, le=100),
     headers: TCStandardHeaders = Depends(tc_standard_headers_dependency()),
     service: ProductService = Depends(get_product_service)
 ) -> TCSuccessModel:
     """
-    Get customers filtered by product name
+    Get customers filtered by product name with Texas Capital standard pagination
     
     Returns a Texas Capital standard response with customers for the specified product.
     Accepts standard Texas Capital headers for request tracking.
+    Supports offset-based pagination as defined in standard-swagger-fragments.yaml.
     """
     try:
-        TCLogger.log_request("GET /products/customers", headers, {"product_name": product_name})
+        # Validate pagination using TC standards
+        from utils.tc_standards import TCPagination
+        pagination = TCPagination.validate_offset_pagination(offset, limit)
+        
+        TCLogger.log_request("GET /products/customers", headers, {
+            "product_name": product_name, 
+            "pagination": pagination
+        })
         
         # Basic validation
         if not product_name.strip():
@@ -107,7 +164,7 @@ async def get_customers_by_product(
             )
             raise HTTPException(status_code=400, detail=error_response.model_dump())
         
-        result = await service.get_customers_by_product(product_name, headers)
+        result = await service.get_customers_by_product(product_name, headers, **pagination)
         return result
         
     except HTTPException:

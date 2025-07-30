@@ -72,33 +72,44 @@ class ProductService:
 
     async def get_all_products(
         self,
-        headers: Optional[TCStandardHeaders] = None
+        headers: Optional[TCStandardHeaders] = None,
+        offset: int = 0,
+        limit: int = 10
     ) -> TCSuccessModel:
         """
-        Get all available products - TC Standard Response
+        Get all available products with pagination - TC Standard Response
         
         Args:
             headers: Texas Capital standard headers
+            offset: Number of items to skip (pagination)
+            limit: Number of items to return (pagination)
             
         Returns:
-            TCSuccessModel: Standard TC response with product data
+            TCSuccessModel: Standard TC response with paginated product data
         """
         try:
             TCLogger.log_info(
                 "Retrieving loan products", 
                 headers, 
-                {"total_products": len(self._products_catalog)}
+                {"total_products": len(self._products_catalog), "offset": offset, "limit": limit}
             )
 
+            # Apply pagination to products catalog
+            total_products = len(self._products_catalog)
+            paginated_products = self._products_catalog[offset:offset + limit]
+            
             # Convert products to dict format for TC response
-            products_data = [product.model_dump() for product in self._products_catalog]
+            products_data = [product.model_dump() for product in paginated_products]
 
             response = TCSuccessModel(
                 code=200,
                 message="Products retrieved successfully",
                 details={
                     "products": products_data,
-                    "total": len(self._products_catalog),
+                    "total": total_products,
+                    "offset": offset,
+                    "limit": limit,
+                    "returned": len(products_data),
                     "service": "ProductService",
                     "timestamp": datetime.now().isoformat()
                 }
@@ -107,7 +118,7 @@ class ProductService:
             TCLogger.log_success(
                 "Products retrieved successfully", 
                 headers, 
-                {"total_products": len(self._products_catalog)}
+                {"total_products": total_products, "returned": len(products_data), "offset": offset, "limit": limit}
             )
             
             return response
@@ -139,23 +150,27 @@ class ProductService:
     async def get_customers_by_product(
         self, 
         product_name: str,
-        headers: Optional[TCStandardHeaders] = None
+        headers: Optional[TCStandardHeaders] = None,
+        offset: int = 0,
+        limit: int = 10
     ) -> TCSuccessModel:
         """
-        Get customers filtered by product name - TC Standard Response
+        Get customers filtered by product name with pagination - TC Standard Response
         
         Args:
             product_name: Product name to filter by
             headers: Texas Capital standard headers
+            offset: Number of items to skip (pagination)
+            limit: Number of items to return (pagination)
             
         Returns:
-            TCSuccessModel: Standard TC response with customer data
+            TCSuccessModel: Standard TC response with paginated customer data
         """
         try:
             TCLogger.log_info(
                 "Retrieving customers by product", 
                 headers, 
-                {"product_name": product_name}
+                {"product_name": product_name, "offset": offset, "limit": limit}
             )
 
             # Query DynamoDB for bookings
@@ -189,11 +204,15 @@ class ProductService:
                     logger.warning(f"Failed to parse booking item: {e}")
                     continue
 
-            # Generate summary
-            summary = self._generate_customer_summary(customers)
+            # Apply pagination to customers
+            total_customers = len(customers)
+            paginated_customers = customers[offset:offset + limit]
             
-            # Convert customers to dict format
-            customers_data = [customer.model_dump() for customer in customers]
+            # Generate summary
+            summary = self._generate_customer_summary(customers)  # Summary based on all customers
+            
+            # Convert paginated customers to dict format
+            customers_data = [customer.model_dump() for customer in paginated_customers]
 
             response = TCSuccessModel(
                 code=200,
@@ -201,7 +220,10 @@ class ProductService:
                 details={
                     "product_name": product_name,
                     "customers": customers_data,
-                    "total_customers": len(customers),
+                    "total_customers": total_customers,
+                    "offset": offset,
+                    "limit": limit,
+                    "returned": len(customers_data),
                     "summary": summary,
                     "service": "ProductService",
                     "timestamp": datetime.now().isoformat()
@@ -211,7 +233,7 @@ class ProductService:
             TCLogger.log_success(
                 "Customers retrieved successfully", 
                 headers, 
-                {"product_name": product_name, "total_customers": len(customers)}
+                {"product_name": product_name, "total_customers": total_customers, "returned": len(customers_data), "offset": offset, "limit": limit}
             )
             
             return response
