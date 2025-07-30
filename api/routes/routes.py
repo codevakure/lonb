@@ -6,6 +6,9 @@ from api.routes.loan_booking_management_routes import loan_booking_router
 # Import product router
 from api.routes.product_routes import product_router
 
+# Import boarding sheet management router
+from api.routes.boarding_sheet_management_routes import boarding_sheet_router
+
 # Create main API router
 api_router = APIRouter(prefix="/api")
 
@@ -14,3 +17,6 @@ api_router.include_router(loan_booking_router)
 
 # Include product routes
 api_router.include_router(product_router)
+
+# Include boarding sheet management routes
+api_router.include_router(boarding_sheet_router)
