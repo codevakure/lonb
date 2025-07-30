@@ -3,7 +3,22 @@
 ## Project Context
 This is a **Commercial Loan Service** - a production-ready FastAPI microservice for managing loan documents, data extraction, and booking workflows. The codebase follows enterprise-grade standards with comprehensive testing, monitoring, and security.
 
-## 🎯 Primary Use Cases
+## �️ Texas Capital Standards Architecture
+**CRITICAL**: This project follows a **layered architecture** that separates Texas Capital standards from business domain logic. **ALWAYS** follow the architecture guidelines in:
+- 📋 **Architecture Guide**: `.github/instructions/tc-standards-architecture.instructions.md`
+
+### Quick Architecture Summary:
+1. **TC Standards Layer** (`api/models/tc_standards.py`) - Core models from `standard-swagger-fragments.yaml`
+2. **Business Domain Layer** (`api/models/business_models.py`) - Domain models extending TC standards  
+3. **Utility Layer** (`utils/tc_standards.py`) - Reusable TC utilities
+
+**ALWAYS USE**:
+- `TCStandardHeaders.from_fastapi_headers()` for header handling
+- `TCLogger.log_request()`, `TCLogger.log_success()`, `TCLogger.log_error()` for logging
+- `TCResponse.success()` and `TCResponse.error()` for responses
+- Optional headers: `Header(None, alias="...")` (ALL TC headers are optional!)
+
+## �🎯 Primary Use Cases
 - Document management (upload, download, process loan documents)
 - AI-powered structured data extraction from loan documents
 - Loan booking workflow management
@@ -43,11 +58,39 @@ This is a **Commercial Loan Service** - a production-ready FastAPI microservice 
 ```
 api/
 ├── api/                    # API layer (routes, models)
-│   ├── models/            # Pydantic models and schemas
-│   │   ├── extraction_models.py    # Document extraction schemas
-│   │   ├── loan_booking_models.py  # Loan booking data models
+│   ├── models/            # Layered model architecture
+│   │   ├── tc_standards.py        # Texas Capital standard models (TCSuccessModel, TCErrorModel, etc.)
+│   │   ├── business_models.py     # Business domain models extending TC standards
+│   │   ├── extraction_models.py   # Document extraction schemas
+│   │   ├── loan_booking_models.py # Loan booking data models
 │   │   ├── s3_management_models.py # S3 operation models
-│   │   └── schemas.py              # Document type schemas
+│   │   ├── schemas.py             # Document type schemas
+│   │   └── legacy_models.py       # Legacy models (for reference)
+│   └── routes/            # FastAPI route definitions
+│       ├── document_routes.py      # Document CRUD operations
+│       ├── loan_booking_routes.py  # Loan booking workflows
+│       └── routes.py               # Main router configuration
+├── services/              # Business logic layer
+│   ├── document_service.py         # Document management logic
+│   ├── structured_extractor_service.py # AI extraction logic
+│   └── bedrock_llm_generator.py    # Bedrock AI integration
+├── utils/                 # Utility functions
+│   ├── tc_standards.py            # Texas Capital standards utilities (TCStandardHeaders, TCLogger, TCResponse)
+│   ├── aws_utils.py               # AWS SDK utilities
+│   └── bedrock_kb_retriever.py    # Knowledge base retrieval
+├── config/                # Configuration management
+│   └── config_kb_loan.py         # Application configuration
+├── tests/                 # Comprehensive test suite
+│   ├── conftest.py               # Test fixtures and setup
+│   ├── test_loan_booking_routes.py # Route testing
+│   ├── test_document_routes.py    # Document API testing
+│   └── test_aws_utils.py          # AWS utility testing
+├── scripts/               # Deployment and management
+│   ├── deploy.sh                 # Production deployment
+│   └── health-check.sh           # Health monitoring
+└── monitoring/            # Observability configuration
+    └── prometheus.yml            # Metrics configuration
+```
 │   └── routes/            # FastAPI route definitions
 │       ├── document_routes.py      # Document CRUD operations
 │       ├── loan_booking_routes.py  # Loan booking workflows
@@ -58,7 +101,8 @@ api/
 │   └── bedrock_llm_generator.py    # Bedrock AI integration
 ├── utils/                 # Utility functions
 │   ├── aws_utils.py               # AWS SDK utilities
-│   └── bedrock_kb_retriever.py    # Knowledge base retrieval
+│   ├── bedrock_kb_retriever.py    # Knowledge base retrieval
+│   └── tc_standards.py            # Texas Capital standards utility classes
 ├── config/                # Configuration management
 │   └── config_kb_loan.py         # Application configuration
 ├── tests/                 # Comprehensive test suite
@@ -81,6 +125,73 @@ api/
 - **Error Handling**: Use FastAPI HTTPException with proper status codes
 - **Logging**: Use structured logging with context information
 - **Validation**: Leverage Pydantic models for data validation
+- **Texas Capital Standards**: Always use the TC standards architecture from `.github/instructions/tc-standards-architecture.instructions.md`
+
+### Texas Capital Standards Architecture Usage
+**ALWAYS FOLLOW** the layered architecture for Texas Capital standards compliance:
+
+```python
+# Import TC standards first
+from api.models.tc_standards import TCSuccessModel, TCErrorModel, TCErrorDetail
+from api.models.business_models import LoanProduct, ProductListResponse
+from utils.tc_standards import TCStandardHeaders, TCLogger, TCResponse
+
+# Standard endpoint pattern
+@router.get("/api/endpoint", response_model=TCSuccessModel)
+async def endpoint(
+    x_tc_request_id: Optional[str] = Header(None, alias="x-tc-request-id"),
+    x_tc_correlation_id: Optional[str] = Header(None, alias="x-tc-correlation-id"),
+    tc_api_key: Optional[str] = Header(None, alias="tc-api-key")
+) -> TCSuccessModel:
+    # Create headers object (handles None values gracefully)
+    headers = TCStandardHeaders.from_fastapi_headers(
+        x_tc_request_id=x_tc_request_id,
+        x_tc_correlation_id=x_tc_correlation_id,
+        tc_api_key=tc_api_key
+    )
+    
+    # Log request
+    TCLogger.log_request("/api/endpoint", headers)
+    
+    try:
+        # Business logic here
+        result = await some_operation()
+        
+        # Log success
+        TCLogger.log_success("Operation name", headers, {"additional": "context"})
+        
+        # Return standardized response
+        return TCResponse.success(
+            code=200,
+            message="Operation successful",
+            data={"result": result},
+            headers=headers
+        )
+        
+    except Exception as e:
+        # Log error
+        error_id = TCLogger.log_error("Operation name", e, headers)
+        
+        # Return standardized error
+        error_response = TCResponse.error(
+            code=500,
+            message="Operation failed",
+            headers=headers,
+            error_details=[
+                TCErrorDetail(source="service", message="Operation failed")
+            ]
+        )
+        
+        raise HTTPException(status_code=500, detail=error_response.dict())
+```
+
+**Key Architecture Benefits:**
+- **Consistent Header Handling**: All Texas Capital headers are optional by default
+- **Standardized Logging**: Consistent log format with correlation IDs
+- **Uniform Responses**: All responses follow Texas Capital standards
+- **Reduced Boilerplate**: Less repetitive code across endpoints
+- **Automatic Compliance**: Built-in compliance with standard-swagger-fragments.yaml
+- **Clear Separation**: TC standards separate from business logic
 
 ### API Design Patterns
 - **RESTful Routes**: Follow REST conventions consistently
@@ -119,11 +230,65 @@ async def upload_to_s3(file_content: bytes, key: str) -> str:
 ## 🎯 Common Tasks & Solutions
 
 ### Adding New API Endpoints
-1. **Route Definition**: Add to appropriate route file
-2. **Pydantic Models**: Define request/response models
-3. **Business Logic**: Implement in services layer
-4. **Tests**: Write comprehensive test coverage
-5. **Documentation**: Add docstrings and examples
+1. **Follow TC Architecture**: Always follow `.github/instructions/tc-standards-architecture.instructions.md`
+2. **Import Correctly**: TC standards first, then business models, then utilities
+3. **Optional Headers**: Use `Optional[str] = Header(None, alias="...")` for all TC headers
+4. **Use TC Utilities**: `TCStandardHeaders`, `TCLogger`, `TCResponse` for all endpoints
+5. **Extend TC Models**: Business models should extend TC standard models
+6. **Business Logic**: Implement in services layer
+7. **Tests**: Write comprehensive test coverage
+8. **Documentation**: Add docstrings and examples
+
+#### Example New Endpoint Template:
+```python
+from api.models.tc_standards import TCSuccessModel, TCErrorModel, TCErrorDetail
+from api.models.business_models import YourBusinessModel
+from utils.tc_standards import TCStandardHeaders, TCLogger, TCResponse
+
+@router.get("/new-endpoint", response_model=TCSuccessModel)
+async def new_endpoint(
+    # Always include TC standard headers as optional
+    x_tc_request_id: Optional[str] = Header(None, alias="x-tc-request-id"),
+    x_tc_correlation_id: Optional[str] = Header(None, alias="x-tc-correlation-id"),
+    tc_api_key: Optional[str] = Header(None, alias="tc-api-key"),
+    # Your specific parameters
+    param: str = Query(..., description="Your parameter")
+) -> TCSuccessModel:
+    headers = TCStandardHeaders.from_fastapi_headers(
+        x_tc_request_id=x_tc_request_id,
+        x_tc_correlation_id=x_tc_correlation_id,
+        tc_api_key=tc_api_key
+    )
+    
+    TCLogger.log_request("/new-endpoint", headers)
+    
+    try:
+        # Your business logic
+        result = await your_service.operation(param)
+        
+        TCLogger.log_success("Operation name", headers)
+        
+        return TCResponse.success(
+            code=200,
+            message="Success message",
+            data={"result": result},
+            headers=headers
+        )
+        
+    except Exception as e:
+        TCLogger.log_error("Operation name", e, headers)
+        
+        error_response = TCResponse.error(
+            code=500,
+            message="Error message",
+            headers=headers,
+            error_details=[
+                TCErrorDetail(source="service", message="Specific error")
+            ]
+        )
+        
+        raise HTTPException(status_code=500, detail=error_response.dict())
+```
 
 ### Document Schema Extensions
 1. **Schema Definition**: Add to `schemas.py`
@@ -444,20 +609,30 @@ async def create_document(
 ### Code Generation Requirements
 When generating API endpoints:
 1. **Always reference** `standard-swagger-fragments.yaml` for response models
-2. **Include proper OpenAPI decorators** with complete documentation
-3. **Implement all standard headers** as parameters
-4. **Use Texas Capital error patterns** consistently
-5. **Add comprehensive logging** with correlation IDs
-6. **Include input validation** with Pydantic models
-7. **Provide realistic examples** in docstrings
-8. **Consider security implications** in all implementations
+2. **Follow TC architecture** from `.github/instructions/tc-standards-architecture.instructions.md`
+3. **Use TC standard models** with business model extensions
+4. **Implement all standard headers** as optional parameters
+5. **Use TC utilities** for headers, logging, and responses
+6. **Include proper OpenAPI decorators** with complete documentation
+7. **Add comprehensive logging** with correlation IDs
+8. **Include input validation** with Pydantic models
+9. **Provide realistic examples** in docstrings
+10. **Consider security implications** in all implementations
+
+### Model Architecture Requirements
+- **TC Standards Layer**: Use `api/models/tc_standards.py` for core Texas Capital models
+- **Business Layer**: Use `api/models/business_models.py` for domain models that extend TC standards
+- **Utilities Layer**: Use `utils/tc_standards.py` for reusable TC functionality
+- **Clear Separation**: Never mix TC standards with business logic
+- **Consistent Naming**: Use `TC` prefix for standards, descriptive names for business
 
 ### Testing Requirements
 - **Test all response codes** defined in the OpenAPI spec
 - **Validate response schemas** against Texas Capital standards
-- **Test header validation** for required Texas Capital headers
+- **Test optional headers** (no headers should be required)
 - **Mock external dependencies** properly
 - **Test error conditions** and ensure proper error model responses
 - **Verify logging** includes correlation IDs and security events
+- **Test TC utilities** work correctly with None values
 
-Remember: Every endpoint must be **production-ready**, **secure**, and **compliant** with Texas Capital's enterprise API standards.
+Remember: Every endpoint must be **production-ready**, **secure**, and **compliant** with Texas Capital's enterprise API standards using the proper layered architecture.
