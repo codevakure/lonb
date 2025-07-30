@@ -23,9 +23,9 @@ from services.loan_booking_management_service import LoanBookingManagementServic
 
 logger = logging.getLogger(__name__)
 
-# Create router with proper naming
+# Create router with proper RESTful naming
 loan_booking_router = APIRouter(
-    prefix="/loan_booking_id", 
+    prefix="/loan-bookings", 
     tags=["Loan Booking Management"]
 )
 
@@ -69,7 +69,7 @@ async def get_all_loan_bookings(
     Supports pagination following Texas Capital standards.
     """
     # Log request using TC standards
-    TCLogger.log_request("/loan_booking_id", headers, {"offset": offset, "limit": limit})
+    TCLogger.log_request("/api/loan-bookings", headers, {"offset": offset, "limit": limit})
     
     try:
         # Validate pagination parameters using TC standards
@@ -138,11 +138,11 @@ async def get_all_loan_bookings(
 
 
 @loan_booking_router.post(
-    "/documents",
+    "",
     response_model=TCSuccessModel,
     status_code=status.HTTP_201_CREATED,
-    summary="Upload Loan Documents",
-    description="Upload multiple loan documents with optional knowledge base ingestion trigger",
+    summary="Create Loan Booking with Documents",
+    description="Create a new loan booking and upload initial loan documents with optional knowledge base ingestion trigger",
     responses={
         201: {
             "model": TCSuccessModel, 
@@ -165,7 +165,7 @@ async def get_all_loan_bookings(
         500: {"model": TCErrorModel, "description": "Internal server error"}
     }
 )
-async def upload_loan_documents(
+async def create_loan_booking_with_documents(
     # File upload
     files: List[UploadFile] = File(..., description="Multiple loan documents to upload"),
     
@@ -187,17 +187,17 @@ async def upload_loan_documents(
     headers: TCStandardHeaders = Depends(tc_standard_headers_dependency())
 ) -> TCSuccessModel:
     """
-    Upload multiple loan documents with product validation and optional KB ingestion.
+    Create a new loan booking and upload initial loan documents with product validation and optional KB ingestion.
     
     - Validates product type against supported loan products
+    - Creates a new loan booking record
     - Uploads files to S3 with proper metadata
-    - Creates or updates loan booking record
     - Optionally triggers knowledge base ingestion for document processing
     - Returns loan booking ID and upload results
     """
     # Log request using TC standards
     TCLogger.log_request(
-        "/loan_booking_id/documents", 
+        "/api/loan-bookings", 
         headers,
         {
             "file_count": len(files),

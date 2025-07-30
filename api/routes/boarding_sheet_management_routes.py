@@ -19,8 +19,11 @@ from api.models.boarding_sheet_management_models import (
 )
 from services.boarding_sheet_management_service import BoardingSheetManagementService
 
-# Create router
-boarding_sheet_router = APIRouter(prefix="/boarding_sheets", tags=["Boarding Sheet Management"])
+# Create router with proper RESTful naming to show relationship with loan bookings
+boarding_sheet_router = APIRouter(
+    prefix="/loan-bookings", 
+    tags=["Boarding Sheet Management"]
+)
 
 
 def get_boarding_sheet_service() -> BoardingSheetManagementService:
@@ -29,17 +32,32 @@ def get_boarding_sheet_service() -> BoardingSheetManagementService:
 
 
 @boarding_sheet_router.post(
-    "/{loan_booking_id}",
+    "/{loan_booking_id}/boarding-sheet",
     response_model=TCSuccessModel,
     status_code=status.HTTP_201_CREATED,
-    summary="Generate/Create Boarding Sheet",
-    description="Generate or create a boarding sheet for a loan booking ID using AI extraction from documents",
+    summary="Create Boarding Sheet",
+    description="Generate a boarding sheet for a loan booking using AI extraction from documents",
     responses={
-        201: {"description": "Boarding sheet created successfully", "model": TCSuccessModel},
-        400: {"description": "Bad request - invalid loan booking ID", "model": TCErrorModel},
-        404: {"description": "Loan booking not found", "model": TCErrorModel},
-        409: {"description": "Boarding sheet already exists (use force_regenerate=true to override)", "model": TCErrorModel},
-        500: {"description": "Internal server error", "model": TCErrorModel}
+        201: {
+            "model": TCSuccessModel, 
+            "description": "Boarding sheet created successfully",
+            "headers": {
+                "location": {
+                    "description": "URL of the created boarding sheet resource",
+                    "schema": {"type": "string", "format": "uri"}
+                },
+                "x-tc-correlation-id": {
+                    "description": "Correlation ID for tracking",
+                    "schema": {"type": "string"}
+                }
+            }
+        },
+        400: {"model": TCErrorModel, "description": "Bad request - invalid loan booking ID or parameters"},
+        401: {"model": TCErrorModel, "description": "Unauthorized - authentication required"},
+        403: {"model": TCErrorModel, "description": "Forbidden - insufficient permissions"},
+        404: {"model": TCErrorModel, "description": "Loan booking not found"},
+        409: {"model": TCErrorModel, "description": "Boarding sheet already exists (use force_regenerate=true to override)"},
+        500: {"model": TCErrorModel, "description": "Internal server error"}
     }
 )
 async def create_boarding_sheet(
@@ -50,7 +68,7 @@ async def create_boarding_sheet(
     service: BoardingSheetManagementService = Depends(get_boarding_sheet_service)
 ) -> TCSuccessModel:
     """
-    Generate/Create a boarding sheet for a loan booking ID.
+    Create a boarding sheet for a specific loan booking.
     
     This endpoint extracts boarding sheet data from loan documents using AI and stores it in DynamoDB.
     Updates the boarding sheet flag in the main loan booking table.
@@ -66,10 +84,10 @@ async def create_boarding_sheet(
         TCSuccessModel: Standard TC response with boarding sheet data
         
     Raises:
-        HTTPException: 400/404/409/500 for various error conditions
+        HTTPException: 400/401/403/404/409/500 for various error conditions
     """
     try:
-        TCLogger.log_request("POST /boarding_sheets/{loan_booking_id}", headers, {"loan_booking_id": loan_booking_id})
+        TCLogger.log_request(f"/loan-bookings/{loan_booking_id}/boarding-sheet", headers, {"loan_booking_id": loan_booking_id})
         
         # Basic validation
         if not loan_booking_id or not loan_booking_id.strip():
@@ -89,9 +107,10 @@ async def create_boarding_sheet(
         # Call service to create boarding sheet
         result = await service.create_boarding_sheet(loan_booking_id, request_data, headers)
         
-        # Set response headers for 201 Created
-        response.headers["location"] = f"/api/boarding_sheets/{loan_booking_id}"
-        response.headers["x-tc-correlation-id"] = headers.correlation_id or "unknown"
+        # Set response headers for 201 Created following TC standards
+        response.headers["location"] = f"/api/loan-bookings/{loan_booking_id}/boarding-sheet"
+        if headers.correlation_id:
+            response.headers["x-tc-correlation-id"] = headers.correlation_id
         
         # Return standardized success response
         return TCResponse.success(
@@ -104,7 +123,7 @@ async def create_boarding_sheet(
     except HTTPException:
         raise
     except Exception as e:
-        error_id = TCLogger.log_error("POST /boarding_sheets/{loan_booking_id} failed", e, headers)
+        error_id = TCLogger.log_error("Boarding sheet creation", e, headers)
         
         # Determine appropriate error code based on error message
         if "not found" in str(e).lower():
@@ -123,7 +142,7 @@ async def create_boarding_sheet(
             headers=headers,
             error_details=[
                 TCErrorDetail(
-                    source="boarding_sheet_routes.create_boarding_sheet",
+                    source="boarding_sheet_service",
                     message=str(e)
                 )
             ]
@@ -132,16 +151,18 @@ async def create_boarding_sheet(
 
 
 @boarding_sheet_router.get(
-    "/{loan_booking_id}",
+    "/{loan_booking_id}/boarding-sheet",
     response_model=TCSuccessModel,
     status_code=status.HTTP_200_OK,
     summary="Get Boarding Sheet",
-    description="Retrieve boarding sheet data for a specific loan booking ID",
+    description="Retrieve boarding sheet data for a specific loan booking",
     responses={
-        200: {"description": "Boarding sheet retrieved successfully", "model": TCSuccessModel},
-        400: {"description": "Bad request - invalid loan booking ID", "model": TCErrorModel},
-        404: {"description": "Boarding sheet not found", "model": TCErrorModel},
-        500: {"description": "Internal server error", "model": TCErrorModel}
+        200: {"model": TCSuccessModel, "description": "Boarding sheet retrieved successfully"},
+        400: {"model": TCErrorModel, "description": "Bad request - invalid loan booking ID"},
+        401: {"model": TCErrorModel, "description": "Unauthorized - authentication required"},
+        403: {"model": TCErrorModel, "description": "Forbidden - insufficient permissions"},
+        404: {"model": TCErrorModel, "description": "Boarding sheet not found"},
+        500: {"model": TCErrorModel, "description": "Internal server error"}
     }
 )
 async def get_boarding_sheet(
@@ -150,7 +171,7 @@ async def get_boarding_sheet(
     service: BoardingSheetManagementService = Depends(get_boarding_sheet_service)
 ) -> TCSuccessModel:
     """
-    Get boarding sheet data for a specific loan booking ID.
+    Get boarding sheet data for a specific loan booking.
     
     Retrieves the boarding sheet data from DynamoDB. Returns the most recent version
     of the boarding sheet for the specified loan booking.
@@ -164,10 +185,10 @@ async def get_boarding_sheet(
         TCSuccessModel: Standard TC response with boarding sheet data
         
     Raises:
-        HTTPException: 400/404/500 for various error conditions
+        HTTPException: 400/401/403/404/500 for various error conditions
     """
     try:
-        TCLogger.log_request("GET /boarding_sheets/{loan_booking_id}", headers, {"loan_booking_id": loan_booking_id})
+        TCLogger.log_request(f"/loan-bookings/{loan_booking_id}/boarding-sheet", headers, {"loan_booking_id": loan_booking_id})
         
         # Basic validation
         if not loan_booking_id or not loan_booking_id.strip():
@@ -198,7 +219,7 @@ async def get_boarding_sheet(
     except HTTPException:
         raise
     except Exception as e:
-        error_id = TCLogger.log_error("GET /boarding_sheets/{loan_booking_id} failed", e, headers)
+        error_id = TCLogger.log_error("Boarding sheet retrieval", e, headers)
         
         # Determine appropriate error code based on error message
         if "not found" in str(e).lower():
@@ -214,7 +235,7 @@ async def get_boarding_sheet(
             headers=headers,
             error_details=[
                 TCErrorDetail(
-                    source="boarding_sheet_routes.get_boarding_sheet",
+                    source="boarding_sheet_service",
                     message=str(e)
                 )
             ]
@@ -223,16 +244,19 @@ async def get_boarding_sheet(
 
 
 @boarding_sheet_router.put(
-    "/{loan_booking_id}",
+    "/{loan_booking_id}/boarding-sheet",
     response_model=TCSuccessModel,
     status_code=status.HTTP_200_OK,
     summary="Update Boarding Sheet",
-    description="Update boarding sheet data for a specific loan booking ID",
+    description="Update boarding sheet data for a specific loan booking",
     responses={
-        200: {"description": "Boarding sheet updated successfully", "model": TCSuccessModel},
-        400: {"description": "Bad request - invalid data", "model": TCErrorModel},
-        404: {"description": "Boarding sheet not found", "model": TCErrorModel},
-        500: {"description": "Internal server error", "model": TCErrorModel}
+        200: {"model": TCSuccessModel, "description": "Boarding sheet updated successfully"},
+        400: {"model": TCErrorModel, "description": "Bad request - invalid data or loan booking ID"},
+        401: {"model": TCErrorModel, "description": "Unauthorized - authentication required"},
+        403: {"model": TCErrorModel, "description": "Forbidden - insufficient permissions"},
+        404: {"model": TCErrorModel, "description": "Boarding sheet not found"},
+        422: {"model": TCErrorModel, "description": "Unprocessable entity - validation failed"},
+        500: {"model": TCErrorModel, "description": "Internal server error"}
     }
 )
 async def update_boarding_sheet(
@@ -242,7 +266,7 @@ async def update_boarding_sheet(
     service: BoardingSheetManagementService = Depends(get_boarding_sheet_service)
 ) -> TCSuccessModel:
     """
-    Update boarding sheet data for a specific loan booking ID.
+    Update boarding sheet data for a specific loan booking.
     
     Updates the existing boarding sheet data in DynamoDB. Creates a new version
     and tracks what fields were changed.
@@ -257,10 +281,10 @@ async def update_boarding_sheet(
         TCSuccessModel: Standard TC response with update results
         
     Raises:
-        HTTPException: 400/404/500 for various error conditions
+        HTTPException: 400/401/403/404/422/500 for various error conditions
     """
     try:
-        TCLogger.log_request("PUT /boarding_sheets/{loan_booking_id}", headers, {"loan_booking_id": loan_booking_id})
+        TCLogger.log_request(f"/loan-bookings/{loan_booking_id}/boarding-sheet", headers, {"loan_booking_id": loan_booking_id})
         
         # Basic validation
         if not loan_booking_id or not loan_booking_id.strip():
@@ -305,7 +329,7 @@ async def update_boarding_sheet(
     except HTTPException:
         raise
     except Exception as e:
-        error_id = TCLogger.log_error("PUT /boarding_sheets/{loan_booking_id} failed", e, headers)
+        error_id = TCLogger.log_error("Boarding sheet update", e, headers)
         
         # Determine appropriate error code based on error message
         if "not found" in str(e).lower():
@@ -321,7 +345,7 @@ async def update_boarding_sheet(
             headers=headers,
             error_details=[
                 TCErrorDetail(
-                    source="boarding_sheet_routes.update_boarding_sheet",
+                    source="boarding_sheet_service",
                     message=str(e)
                 )
             ]
