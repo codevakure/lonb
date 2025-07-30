@@ -795,6 +795,43 @@ def update_booking_sheet_created_status(loan_booking_id: str, created: bool = Tr
         return False
 
 
+def get_all_loan_booking_ids() -> List[Dict[str, Any]]:
+    """
+    Retrieve all loan booking IDs and their associated data from DynamoDB.
+    
+    Returns:
+        List of dictionaries containing loan booking data
+    """
+    try:
+        table = dynamodb.Table(LOAN_BOOKING_TABLE_NAME)
+        
+        # Use scan to get all items (note: this may be inefficient for large tables)
+        response = table.scan()
+        items = response.get('Items', [])
+        
+        # Handle pagination if there are more items
+        while 'LastEvaluatedKey' in response:
+            response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+            items.extend(response.get('Items', []))
+        
+        # Extract and return relevant fields
+        result = []
+        for item in items:
+            result.append({
+                'loan_booking_id': item.get('loanBookingId'),
+                'customer_name': item.get('customerName'),
+                'product_name': item.get('productName'),
+                'created_at': item.get('timestamp'),
+                'is_sync_completed': item.get('isSyncCompleted', False),
+                'booking_sheet_created': item.get('booking_sheet_created', False)
+            })
+            
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error retrieving all loan booking IDs: {str(e)}")
+        raise
+
 def update_booking_sheet_data(loan_booking_id: str, booking_sheet_data: Dict[str, Any]) -> bool:
     """
     Update existing booking sheet data in the booking sheets table.

@@ -5,7 +5,7 @@ import pytest
 import asyncio
 import boto3
 from fastapi.testclient import TestClient
-from moto import mock_s3, mock_dynamodb
+from moto import mock_aws
 from unittest.mock import Mock, patch
 import os
 import tempfile
@@ -13,7 +13,6 @@ from typing import Generator, Dict, Any
 
 # Import the main app
 from main import app
-from config.config_kb_loan import get_settings
 
 # Test settings
 TEST_SETTINGS = {
@@ -36,7 +35,7 @@ def event_loop():
 def test_settings():
     """Override settings for testing"""
     with patch.dict(os.environ, TEST_SETTINGS):
-        yield get_settings()
+        yield TEST_SETTINGS
 
 @pytest.fixture
 def client(test_settings) -> Generator[TestClient, None, None]:
@@ -47,7 +46,7 @@ def client(test_settings) -> Generator[TestClient, None, None]:
 @pytest.fixture
 def mock_aws_services():
     """Mock AWS services for testing"""
-    with mock_s3(), mock_dynamodb():
+    with mock_aws():
         # Create mock S3 bucket
         s3_client = boto3.client('s3', region_name='us-east-1')
         s3_client.create_bucket(Bucket=TEST_SETTINGS["S3_BUCKET"])

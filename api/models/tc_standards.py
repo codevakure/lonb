@@ -54,7 +54,7 @@ class TCErrorModel(BaseModel):
     code: int = Field(..., description="HTTP Status Error code")
     serviceName: str = Field(..., description="API Service Name", example="loan-onboarding-api")
     majorVersion: str = Field(..., description="API Service Major Version", example="v1")
-    timestamp: datetime = Field(..., description="The timestamp when the error occurred")
+    timestamp: str = Field(..., description="The timestamp when the error occurred")
     traceId: Optional[str] = Field(None, description="Unique identifier for tracing the request")
     message: str = Field(..., description="Human-readable error message")
     details: Optional[List[TCErrorDetail]] = Field(
@@ -84,7 +84,7 @@ class TCHealthCheckModel(BaseModel):
     status: HealthStatus = Field(..., description="Overall health status of the API")
     serviceName: str = Field(..., description="API service name that is returning the response")
     serviceVersion: str = Field(..., description="API version that is returning the response")
-    timestamp: datetime = Field(..., description="The timestamp to check API health")
+    timestamp: str = Field(..., description="The timestamp to check API health")
     message: str = Field(..., description="Human-readable message")
     dependencies: Optional[List[TCDependencyModel]] = Field(
         None, 
@@ -111,4 +111,4 @@ class TCRootInfoModel(BaseModel):
     message: str = Field(..., description="API description message")
     version: str = Field(..., description="API version")
     serviceName: str = Field(..., description="Service name")
-    timestamp: datetime = Field(..., description="Current timestamp")
+    timestamp: str = Field(..., description="Current timestamp")

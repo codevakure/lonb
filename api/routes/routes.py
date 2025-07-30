@@ -1,12 +1,16 @@
 from fastapi import APIRouter
 
-# Import all routers
-from api.routes.loan_booking_routes import loan_booking_id_router
-from api.routes.document_routes import document_router
+# Import clean loan booking management router
+from api.routes.loan_booking_management_routes import loan_booking_router
+
+# Import product router
+from api.routes.product_routes import product_router
 
 # Create main API router
 api_router = APIRouter(prefix="/api")
 
-# Include all sub-routes
-api_router.include_router(loan_booking_id_router)
-api_router.include_router(document_router)
+# Include loan booking management routes
+api_router.include_router(loan_booking_router)
+
+# Include product routes
+api_router.include_router(product_router)

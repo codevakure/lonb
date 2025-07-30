@@ -6,7 +6,7 @@ import logging
 import uuid
 import asyncio
 from datetime import datetime
-from utils.aws_utils import get_loan_booking_data, save_booking_db, save_booking_metadata, save_kb_compatible_metadata, verify_document_upload, wait_for_auto_ingestion, wait_for_direct_ingestion, async_sync_data_source, check_ingestion_job_status, update_booking_sync_status, get_booking_sync_status, check_booking_sheet_exists, get_booking_sheet_data, save_booking_sheet_data, update_booking_sheet_created_status, update_booking_sheet_data
+from utils.aws_utils import get_loan_booking_data, save_booking_db, save_booking_metadata, save_kb_compatible_metadata, verify_document_upload, wait_for_auto_ingestion, wait_for_direct_ingestion, async_sync_data_source, check_ingestion_job_status, update_booking_sync_status, get_booking_sync_status, check_booking_sheet_exists, get_booking_sheet_data, save_booking_sheet_data, update_booking_sheet_created_status, update_booking_sheet_data, get_all_loan_booking_ids
 from config.config_kb_loan import KB_ID, DATA_SOURCE_ID, S3_BUCKET, DEFAULT_S3_PREFIX, AUTO_INGESTION_WAIT_TIME, AWS_REGION, LOAN_BOOKING_TABLE_NAME
 from services.structured_extractor_service import StructuredExtractorServiceAsync, StructuredExtractorService
 from services.document_service import DocumentService
@@ -23,6 +23,29 @@ loan_booking_id_router = APIRouter(prefix="/loan_booking_id", tags=["Loan Bookin
 
 
 # Loan Booking Id routes
+@loan_booking_id_router.get("", response_model=List[Dict[str, Any]])
+async def list_all_loan_bookings():
+    """
+    Retrieve all loan booking IDs and their associated metadata.
+    
+    Returns:
+        List of dictionaries containing loan booking data including:
+        - loan_booking_id: The unique identifier for the loan booking
+        - customer_name: Name of the customer
+        - product_name: Type of loan product
+        - created_at: Timestamp when the booking was created
+        - is_sync_completed: Whether document sync is completed
+        - booking_sheet_created: Whether booking sheet is created
+    """
+    try:
+        return get_all_loan_booking_ids()
+    except Exception as e:
+        logger.error(f"Error retrieving loan bookings: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving loan bookings: {str(e)}"
+        )
+
 @loan_booking_id_router.get("/{loan_booking_id}/documents")
 async def get_documents_by_loan_booking_id(
     loan_booking_id: str,

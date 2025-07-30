@@ -139,6 +139,30 @@ class TCLogger:
             
         logger.error(f"{operation} failed: {str(error)}", extra=log_extra)
         return error_id
+    
+    @staticmethod
+    def log_info(operation: str, headers: TCStandardHeaders, additional_context: Optional[Dict[str, Any]] = None):
+        """Log informational message with standard Texas Capital format"""
+        log_extra = {}
+        log_extra.update(headers.to_log_extra())
+        
+        if additional_context:
+            log_extra.update(additional_context)
+            
+        logger.info(operation, extra=log_extra)
+    
+    @staticmethod
+    def log_warning(operation: str, headers: TCStandardHeaders, additional_context: Optional[Dict[str, Any]] = None):
+        """Log warning message with standard Texas Capital format"""
+        error_id = str(uuid.uuid4())
+        log_extra = {"warning_id": error_id}
+        log_extra.update(headers.to_log_extra())
+        
+        if additional_context:
+            log_extra.update(additional_context)
+            
+        logger.warning(operation, extra=log_extra)
+        return error_id
 
 
 class TCResponse:
@@ -212,7 +236,7 @@ class TCResponse:
             code=code,
             serviceName=service_name,
             majorVersion=major_version,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.utcnow().isoformat(),
             traceId=headers.correlation_id if headers else None,
             message=message,
             details=error_details or []
