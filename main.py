@@ -4,8 +4,7 @@ import logging
 from dotenv import load_dotenv
 from datetime import datetime
 from api.routes.routes import api_router
-from api.models.tc_standards import TCHealthCheckModel, TCErrorModel, HealthStatus, TCDependencyModel, DependencyStatus
-from api.models.business_models import RootInfoResponse
+from api.models.tc_standards import TCHealthCheckModel, TCErrorModel, HealthStatus, TCDependencyModel, DependencyStatus, RootInfoResponse
 from config.config_kb_loan import LOG_LEVEL, ALLOWED_ORIGINS, ALLOWED_METHODS, ALLOWED_HEADERS, ALLOW_CREDENTIALS, ENV, DEBUG, API_HOST, API_PORT
 import uuid
 

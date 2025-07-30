@@ -1,53 +1,68 @@
-# Contributors Guide
+# 🤝 Contributing to Commercial Loan Onboarding API
 
-Welcome to the Commercial Loan Service project! This guide will help you get started with contributing to our FastAPI-based microservice.
+Thank you for your interest in contributing to the Commercial Loan Onboarding API! This guide will help you get started with contributing to our **Texas Capital Banking standards-compliant** loan management platform.
 
-## 🎯 Project Overview
+## 📋 Table of Contents
 
-The Commercial Loan Service is a production-ready FastAPI microservice that handles:
-- Document management for loan processing
-- Structured data extraction using AI
-- Loan booking workflows
-- AWS integration (S3, DynamoDB, Bedrock)
+- [Code of Conduct](#code-of-conduct)
+- [Getting Started](#getting-started)
+- [Development Setup](#development-setup)
+- [Architecture Guidelines](#architecture-guidelines)
+- [Contributing Workflow](#contributing-workflow)
+- [Code Standards](#code-standards)
+- [Testing Guidelines](#testing-guidelines)
+- [Pull Request Process](#pull-request-process)
+- [Issue Reporting](#issue-reporting)
+- [Documentation](#documentation)
 
-## 🚀 Quick Start for Contributors
+## 📜 Code of Conduct
+
+We are committed to providing a welcoming and inspiring community for all. By participating in this project, you agree to abide by our Code of Conduct:
+
+- **Be respectful** and inclusive in all interactions
+- **Be collaborative** and help others learn and grow
+- **Be professional** in all communications
+- **Focus on the community** and shared goals
+- **Report any violations** to the project maintainers
+
+## 🚀 Getting Started
 
 ### Prerequisites
-- **Python 3.11+** (Required)
-- **Git** (Required)
-- **Docker & Docker Compose** (Optional, for containerized development)
-- **VS Code** (Recommended IDE with Python extensions)
-- **AWS CLI** (Optional, for testing AWS integrations)
 
-### 🖥️ Local Development Setup
+Before contributing, ensure you have:
 
-We provide cross-platform development tools for consistent setup:
+- **Python 3.11+** installed
+- **Git** for version control
+- **AWS CLI** configured with appropriate credentials
+- **Docker** (optional, for containerized development)
+- **VS Code** (recommended) with Python extensions
 
-#### Recommended Approach: Using Makefile
+### Quick Setup
 
+1. **Fork the repository**
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd loan-onboarding/api
-
-# Complete development setup
-make init-dev
-
-# Start development server
-make backend
+git clone https://github.com/your-username/lonb.git
+cd lonb/api
 ```
 
-#### Windows Alternative: Using Batch Script
+2. **Create virtual environment**
+```bash
+python -m venv venv
+# Windows
+venv\Scripts\activate
+# macOS/Linux
+source venv/bin/activate
+```
 
-```cmd
-# Clone the repository
-git clone <repository-url>
-cd loan-onboarding/api
+3. **Install dependencies**
+```bash
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+```
 
-# Complete development setup
-make.bat init-dev
-
-# Start development server
+4. **Run tests**
+```bash
+pytest tests/ -v --cov=.
 make.bat backend
 ```
 

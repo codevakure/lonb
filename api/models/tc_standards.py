@@ -112,3 +112,41 @@ class TCRootInfoModel(BaseModel):
     version: str = Field(..., description="API version")
     serviceName: str = Field(..., description="Service name")
     timestamp: str = Field(..., description="Current timestamp")
+
+
+class RootInfoResponse(TCRootInfoModel):
+    """
+    Commercial Loan Service root endpoint response
+    Extends TC Root Info Model with service-specific information
+    """
+    class Config:
+        schema_extra = {
+            "example": {
+                "message": "Commercial Loan Service API - Ready for loan document management and processing",
+                "version": "1.0.0",
+                "serviceName": "loan-onboarding-api",
+                "timestamp": "2024-02-02T12:00:00Z"
+            }
+        }
+
+
+class HealthCheckResponse(TCHealthCheckModel):
+    """
+    Commercial Loan Service specific health check response
+    Extends TC Health Check Model with service-specific dependencies
+    """
+    class Config:
+        schema_extra = {
+            "example": {
+                "status": "NORMAL",
+                "serviceName": "loan-onboarding-api",
+                "serviceVersion": "1.0.0",
+                "timestamp": "2024-02-02T12:00:00Z",
+                "message": "All systems operational",
+                "dependencies": [
+                    {"name": "AWS S3", "status": "UP"},
+                    {"name": "AWS DynamoDB", "status": "UP"},
+                    {"name": "AWS Bedrock", "status": "UP"}
+                ]
+            }
+        }

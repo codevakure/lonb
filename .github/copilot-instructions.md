@@ -1,4 +1,20 @@
-# GitHub Copilot Instructions
+# GitHub Copilot Ins## 🎯 Primary Use Cases
+**The codebase now focuses on 3 core business functionalities:**
+
+### 1. **Loan Booking Management** 
+- Document upload and storage (4 core endpoints)
+- Loan booking metadata management
+- AWS S3 and DynamoDB integration
+
+### 2. **Boarding Sheet Management**
+- AI-powered boarding sheet generation from documents (3 core endpoints)
+- Boarding sheet data storage and versioning
+- Document extraction using AWS Bedrock
+
+### 3. **Product Management**
+- Loan product catalog management (2 core endpoints)
+- Customer-product relationship tracking
+- Product-based data organizationions
 
 ## Project Context
 This is a **Commercial Loan Service** - a production-ready FastAPI microservice for managing loan documents, data extraction, and booking workflows. The codebase follows enterprise-grade standards with comprehensive testing, monitoring, and security.
@@ -59,62 +75,37 @@ This is a **Commercial Loan Service** - a production-ready FastAPI microservice 
 api/
 ├── api/                    # API layer (routes, models)
 │   ├── models/            # Layered model architecture
-│   │   ├── tc_standards.py        # Texas Capital standard models (TCSuccessModel, TCErrorModel, etc.)
-│   │   ├── business_models.py     # Business domain models extending TC standards
-│   │   ├── extraction_models.py   # Document extraction schemas
-│   │   ├── loan_booking_models.py # Loan booking data models
-│   │   ├── s3_management_models.py # S3 operation models
-│   │   ├── schemas.py             # Document type schemas
-│   │   └── legacy_models.py       # Legacy models (for reference)
-│   └── routes/            # FastAPI route definitions
-│       ├── document_routes.py      # Document CRUD operations
-│       ├── loan_booking_routes.py  # Loan booking workflows
-│       └── routes.py               # Main router configuration
+│   │   ├── tc_standards.py               # Texas Capital standard models (TCSuccessModel, TCErrorModel, etc.)
+│   │   ├── loan_booking_management_models.py    # Loan booking business models extending TC standards
+│   │   ├── boarding_sheet_management_models.py  # Boarding sheet business models extending TC standards
+│   │   └── product_models.py                    # Product business models extending TC standards
+│   └── routes/            # Clean segregated API endpoints
+│       ├── loan_booking_management_routes.py    # 4 core loan booking operations
+│       ├── boarding_sheet_management_routes.py  # 3 core boarding sheet operations
+│       ├── product_routes.py                    # Product management operations
+│       └── routes.py                            # Main router configuration
 ├── services/              # Business logic layer
-│   ├── document_service.py         # Document management logic
-│   ├── structured_extractor_service.py # AI extraction logic
-│   └── bedrock_llm_generator.py    # Bedrock AI integration
+│   ├── loan_booking_management_service.py       # Loan booking business logic
+│   ├── boarding_sheet_management_service.py     # Boarding sheet business logic
+│   ├── product_service.py                       # Product business logic
+│   ├── structured_extractor_service.py          # AI extraction service
+│   └── bedrock_llm_generator.py                 # Bedrock AI integration
 ├── utils/                 # Utility functions
-│   ├── tc_standards.py            # Texas Capital standards utilities (TCStandardHeaders, TCLogger, TCResponse)
-│   ├── aws_utils.py               # AWS SDK utilities
-│   └── bedrock_kb_retriever.py    # Knowledge base retrieval
+│   ├── tc_standards.py                          # Texas Capital standards utilities (TCStandardHeaders, TCLogger, TCResponse)
+│   ├── aws_utils.py                             # AWS SDK utilities
+│   └── bedrock_kb_retriever.py                  # Knowledge base retrieval
 ├── config/                # Configuration management
-│   └── config_kb_loan.py         # Application configuration
+│   └── config_kb_loan.py                        # Application configuration
 ├── tests/                 # Comprehensive test suite
-│   ├── conftest.py               # Test fixtures and setup
-│   ├── test_loan_booking_routes.py # Route testing
-│   ├── test_document_routes.py    # Document API testing
-│   └── test_aws_utils.py          # AWS utility testing
+│   ├── conftest.py                              # Test fixtures and setup
+│   ├── test_loan_booking_management_routes.py   # Loan booking API testing
+│   ├── test_product_routes.py                   # Product API testing
+│   └── test_aws_utils.py                        # AWS utility testing
 ├── scripts/               # Deployment and management
-│   ├── deploy.sh                 # Production deployment
-│   └── health-check.sh           # Health monitoring
+│   ├── deploy.sh                                # Production deployment
+│   └── health-check.sh                          # Health monitoring
 └── monitoring/            # Observability configuration
-    └── prometheus.yml            # Metrics configuration
-```
-│   └── routes/            # FastAPI route definitions
-│       ├── document_routes.py      # Document CRUD operations
-│       ├── loan_booking_routes.py  # Loan booking workflows
-│       └── routes.py               # Main router configuration
-├── services/              # Business logic layer
-│   ├── document_service.py         # Document management logic
-│   ├── structured_extractor_service.py # AI extraction logic
-│   └── bedrock_llm_generator.py    # Bedrock AI integration
-├── utils/                 # Utility functions
-│   ├── aws_utils.py               # AWS SDK utilities
-│   ├── bedrock_kb_retriever.py    # Knowledge base retrieval
-│   └── tc_standards.py            # Texas Capital standards utility classes
-├── config/                # Configuration management
-│   └── config_kb_loan.py         # Application configuration
-├── tests/                 # Comprehensive test suite
-│   ├── conftest.py               # Test fixtures and setup
-│   ├── test_loan_booking_routes.py # Route testing
-│   ├── test_document_routes.py    # Document API testing
-│   └── test_aws_utils.py          # AWS utility testing
-├── scripts/               # Deployment and management
-│   ├── deploy.sh                 # Production deployment
-│   └── health-check.sh           # Health monitoring
-└── monitoring/            # Observability configuration
-    └── prometheus.yml            # Metrics configuration
+    └── prometheus.yml                           # Metrics configuration
 ```
 
 ## 🔧 Development Guidelines for Copilot
